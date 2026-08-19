@@ -12,12 +12,14 @@ class HomeScreen extends StatelessWidget {
     super.key,
     required this.session,
     required this.onScan,
+    required this.onOpenHygiene,
     required this.onOpenFamily,
     required this.onOpenAlerts,
   });
 
   final AppSession session;
   final VoidCallback onScan;
+  final VoidCallback onOpenHygiene;
   final VoidCallback onOpenFamily;
   final VoidCallback onOpenAlerts;
 
@@ -37,6 +39,8 @@ class HomeScreen extends StatelessWidget {
                     _buildHeader(context),
                     const SizedBox(height: 22),
                     _ScanHero(onScan: onScan),
+                    const SizedBox(height: 18),
+                    _HygieneCard(onTap: onOpenHygiene),
                     const SizedBox(height: 28),
                     SectionHeading(
                       title: 'Protected household',
@@ -208,6 +212,68 @@ class HomeScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HygieneCard extends StatelessWidget {
+  const _HygieneCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Ink(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFE8FBD9), Color(0xFFD8F2DF)],
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: AppColors.greenDark,
+                  borderRadius: BorderRadius.circular(19),
+                ),
+                child: const Icon(
+                  Icons.restaurant_rounded,
+                  color: AppColors.acid,
+                  size: 29,
+                ),
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Check food hygiene',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Find official ratings nearby or search any UK restaurant.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.arrow_forward_rounded,
+                  color: AppColors.greenDark),
+            ],
           ),
         ),
       ),

@@ -5,6 +5,7 @@ import '../../core/app_theme.dart';
 import '../../core/auth_controller.dart';
 import '../alerts/alerts_screen.dart';
 import '../family/family_screen.dart';
+import '../hygiene/hygiene_screen.dart';
 import '../scan/barcode_scanner_screen.dart';
 import 'home_screen.dart';
 
@@ -33,9 +34,11 @@ class _HomeShellState extends State<HomeShell> {
         HomeScreen(
           session: widget.session,
           onScan: _openScanner,
-          onOpenFamily: () => setState(() => _index = 2),
-          onOpenAlerts: () => setState(() => _index = 1),
+          onOpenHygiene: () => setState(() => _index = 1),
+          onOpenFamily: () => setState(() => _index = 3),
+          onOpenAlerts: () => setState(() => _index = 2),
         ),
+        HygieneScreen(session: widget.session),
         AlertsScreen(session: widget.session),
         FamilyScreen(session: widget.session, auth: widget.auth),
       ],
@@ -48,6 +51,12 @@ class _HomeShellState extends State<HomeShell> {
           icon: Icon(Icons.home_outlined),
           selectedIcon: Icon(Icons.home_rounded, color: AppColors.greenDark),
           label: 'Home',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.restaurant_outlined),
+          selectedIcon:
+              Icon(Icons.restaurant_rounded, color: AppColors.greenDark),
+          label: 'Hygiene',
         ),
         NavigationDestination(
           icon: Icon(Icons.notifications_none_rounded),
@@ -98,6 +107,12 @@ class _HomeShellState extends State<HomeShell> {
                         selectedIcon: Icon(Icons.home_rounded,
                             color: AppColors.greenDark),
                         label: Text('Home'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(Icons.restaurant_outlined),
+                        selectedIcon: Icon(Icons.restaurant_rounded,
+                            color: AppColors.greenDark),
+                        label: Text('Hygiene'),
                       ),
                       NavigationRailDestination(
                         icon: Icon(Icons.notifications_none_rounded),

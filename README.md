@@ -9,6 +9,7 @@ SafeBite is a Flutter app for family allergen checks and UK food recall protecti
 - Preferred supermarket selection
 - Family profiles with UK-regulated allergen preferences
 - Barcode scanning on mobile and web
+- Official UK food hygiene ratings by GPS, postcode, area, or business name
 - Live barcode lookup through Open Food Facts
 - Camera OCR for current ingredient labels on iOS and Android
 - Manual ingredient entry fallback on web
