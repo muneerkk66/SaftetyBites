@@ -33,8 +33,21 @@
   <link rel="manifest" href="manifest.json">
 
   <script>
-    // The value below is injected by flutter build, do not touch.
-    const serviceWorkerVersion = null;
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async function() {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(function(registration) {
+          return registration.unregister();
+        }));
+
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames
+            .filter(function(name) { return name.startsWith('flutter-'); })
+            .map(function(name) { return caches.delete(name); }));
+        }
+      });
+    }
   </script>
   <!-- This script adds the flutter initialization JS code -->
   <script src="flutter.js" defer></script>
@@ -44,9 +57,6 @@
     window.addEventListener('load', function(ev) {
       // Download main.dart.js
       _flutter.loader.loadEntrypoint({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        },
         onEntrypointLoaded: function(engineInitializer) {
           engineInitializer.initializeEngine().then(function(appRunner) {
             appRunner.runApp();
