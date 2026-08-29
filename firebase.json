@@ -1,6 +1,29 @@
 {
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "ai-ranking",
+      "runtime": "nodejs22"
+    },
+    {
+      "source": "functions-product",
+      "codebase": "product-api",
+      "runtime": "nodejs22"
+    },
+    {
+      "source": "functions-venue",
+      "codebase": "venue-photos",
+      "runtime": "nodejs22"
+    },
+    {
+      "source": "functions-recalls",
+      "codebase": "food-recalls",
+      "runtime": "nodejs22"
+    }
+  ],
   "hosting": {
     "public": "build/web",
+    "cleanUrls": true,
     "ignore": [
       "firebase.json",
       "**/.*",

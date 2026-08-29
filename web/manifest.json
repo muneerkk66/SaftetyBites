@@ -1,6 +1,6 @@
 {
-    "name": "SafeBite",
-    "short_name": "SafeBite",
+    "name": "SafeBiteAI",
+    "short_name": "SafeBiteAI",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F7FAF7",

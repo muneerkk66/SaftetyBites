@@ -28,7 +28,9 @@ abstract final class AllergenMatcher {
         ? MatchLevel.avoid
         : traces.isNotEmpty
             ? MatchLevel.caution
-            : MatchLevel.noListedMatch;
+            : product.allergenDataComplete
+                ? MatchLevel.noListedMatch
+                : MatchLevel.unableToVerify;
 
     return MemberAssessment(
       memberId: member.id,

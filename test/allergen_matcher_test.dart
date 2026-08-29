@@ -36,4 +36,26 @@ void main() {
 
     expect(assessment.level, MatchLevel.avoid);
   });
+
+  test('does not show a clear result for partial provider coverage', () {
+    const product = ProductInfo(
+      barcode: '12345679',
+      name: 'Live product',
+      brand: 'Test',
+      ingredients: '',
+      allergenIds: {'milk'},
+      traceAllergenIds: {},
+      allergenDataComplete: false,
+    );
+    const member = FamilyMember(
+      id: '2',
+      name: 'Alex',
+      relationship: 'Adult',
+      allergenIds: {'mustard'},
+    );
+
+    final assessment = AllergenMatcher.assess(product, member);
+
+    expect(assessment.level, MatchLevel.unableToVerify);
+  });
 }

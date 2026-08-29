@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_session.dart';
 import '../../core/app_theme.dart';
+import '../../core/auth_controller.dart';
 import '../../models/allergen.dart';
+import '../../models/family_member.dart';
 import '../../widgets/brand_mark.dart';
 import '../../widgets/member_avatar.dart';
 import '../../widgets/section_heading.dart';
@@ -11,6 +13,7 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({
     super.key,
     required this.session,
+    required this.auth,
     required this.onScan,
     required this.onOpenHygiene,
     required this.onOpenFamily,
@@ -18,6 +21,7 @@ class HomeScreen extends StatelessWidget {
   });
 
   final AppSession session;
+  final AuthController auth;
   final VoidCallback onScan;
   final VoidCallback onOpenHygiene;
   final VoidCallback onOpenFamily;
@@ -28,7 +32,7 @@ class HomeScreen extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: ListenableBuilder(
-        listenable: session,
+        listenable: Listenable.merge([session, auth]),
         builder: (context, _) {
           return CustomScrollView(
             slivers: [
@@ -61,7 +65,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 13),
                     _RecallStatusCard(
                       storeCount: session.selectedStores.length,
-                      postcode: session.postcode,
+                      location: session.locationLabel,
                       onTap: onOpenAlerts,
                     ),
                     if (session.recentlyChecked.isNotEmpty) ...[
@@ -89,8 +93,12 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    final firstName =
-        session.family.isEmpty ? 'there' : session.family.first.name;
+    final accountName = auth.greetingName;
+    final firstName = accountName.isNotEmpty
+        ? accountName
+        : session.family.isEmpty
+            ? 'there'
+            : session.family.first.name;
     return Row(
       children: [
         const BrandMark(compact: true),
@@ -108,7 +116,7 @@ class HomeScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                session.postcode,
+                session.locationLabel,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.greenDark,
                       fontSize: 12,
@@ -120,7 +128,11 @@ class HomeScreen extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         if (session.family.isNotEmpty)
-          MemberAvatar(member: session.family.first, size: 42),
+          _ProfileAvatar(
+            member: session.family.first,
+            photoUrl: auth.user?.photoURL,
+            onTap: onOpenFamily,
+          ),
       ],
     );
   }
@@ -214,6 +226,39 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({
+    required this.member,
+    required this.photoUrl,
+    required this.onTap,
+  });
+
+  final FamilyMember member;
+  final String? photoUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = photoUrl?.trim() ?? '';
+    return Semantics(
+      button: true,
+      label: 'Open family profiles',
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: imageUrl.isEmpty
+            ? MemberAvatar(member: member, size: 42)
+            : CircleAvatar(
+                radius: 21,
+                backgroundColor: AppColors.greenSoft,
+                foregroundImage: NetworkImage(imageUrl),
+                child: const Icon(Icons.person_rounded),
+              ),
       ),
     );
   }
@@ -399,12 +444,12 @@ class _ScanHero extends StatelessWidget {
 class _RecallStatusCard extends StatelessWidget {
   const _RecallStatusCard({
     required this.storeCount,
-    required this.postcode,
+    required this.location,
     required this.onTap,
   });
 
   final int storeCount;
-  final String postcode;
+  final String location;
   final VoidCallback onTap;
 
   @override
@@ -445,7 +490,9 @@ class _RecallStatusCard extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 3),
                       Text(
-                        '$storeCount retailers selected near $postcode',
+                        storeCount == 0
+                            ? 'No retailers selected near $location'
+                            : '$storeCount retailers selected near $location',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],

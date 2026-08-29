@@ -11,6 +11,18 @@ class FoodHygieneService {
 
   static const _baseUrl = 'api.ratings.food.gov.uk';
   static const _pageSize = 20;
+  static const _supermarketSearchTerms = <String>[
+    'Tesco',
+    'Aldi',
+    'Asda',
+    'Sainsbury',
+    'Lidl',
+    'Morrisons',
+    'Waitrose',
+    'Iceland',
+    'Co-op',
+    'Marks Spencer',
+  ];
 
   final http.Client _client;
 
@@ -37,15 +49,54 @@ class FoodHygieneService {
     required double longitude,
     double radiusMiles = 5,
     int page = 1,
+    int pageSize = _pageSize,
+    String? name,
+    int? businessTypeId,
   }) {
     return _request({
+      if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
       'latitude': latitude.toStringAsFixed(6),
       'longitude': longitude.toStringAsFixed(6),
       'maxDistanceLimit': radiusMiles.toStringAsFixed(1),
+      if (businessTypeId != null) 'businessTypeId': '$businessTypeId',
       'sortOptionKey': 'distance',
       'pageNumber': '$page',
-      'pageSize': '$_pageSize',
+      'pageSize': '$pageSize',
     });
+  }
+
+  Future<FoodHygienePage> nearbySupermarkets({
+    required double latitude,
+    required double longitude,
+    double radiusMiles = 5,
+  }) {
+    return nearby(
+      latitude: latitude,
+      longitude: longitude,
+      radiusMiles: radiusMiles,
+      businessTypeId: 7840,
+      pageSize: 100,
+    );
+  }
+
+  Future<List<FoodEstablishment>> nearbySupermarketCandidates({
+    required double latitude,
+    required double longitude,
+    double radiusMiles = 5,
+  }) async {
+    final pages = await Future.wait(
+      _supermarketSearchTerms.map(
+        (name) => nearby(
+          latitude: latitude,
+          longitude: longitude,
+          radiusMiles: radiusMiles,
+          name: name,
+          businessTypeId: 7840,
+          pageSize: 5,
+        ),
+      ),
+    );
+    return pages.expand((page) => page.establishments).toList();
   }
 
   Future<FoodHygienePage> _request(Map<String, String> query) async {

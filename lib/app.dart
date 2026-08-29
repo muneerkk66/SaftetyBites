@@ -5,10 +5,11 @@ import 'core/app_theme.dart';
 import 'core/auth_controller.dart';
 import 'screens/auth/account_access_screen.dart';
 import 'screens/home/home_shell.dart';
+import 'screens/onboarding/intro_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 
-class SafeBiteApp extends StatelessWidget {
-  const SafeBiteApp({
+class SafeBiteAIApp extends StatelessWidget {
+  const SafeBiteAIApp({
     super.key,
     required this.session,
     required this.auth,
@@ -20,12 +21,15 @@ class SafeBiteApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SafeBite',
+      title: 'SafeBiteAI',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: ListenableBuilder(
         listenable: session,
         builder: (context, _) {
+          if (!session.introComplete) {
+            return IntroScreen(session: session);
+          }
           if (!session.accountGateComplete) {
             return AccountAccessScreen(
               auth: auth,
@@ -33,7 +37,7 @@ class SafeBiteApp extends StatelessWidget {
             );
           }
           if (!session.onboardingComplete) {
-            return OnboardingScreen(session: session);
+            return OnboardingScreen(session: session, auth: auth);
           }
           return HomeShell(session: session, auth: auth);
         },

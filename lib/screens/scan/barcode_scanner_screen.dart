@@ -4,6 +4,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/app_session.dart';
 import '../../core/app_theme.dart';
 import '../../services/open_food_facts_service.dart';
+import '../../services/product_repository.dart';
 import 'product_check_screen.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
@@ -20,7 +21,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     detectionSpeed: DetectionSpeed.noDuplicates,
     returnImage: false,
   );
-  final _lookupService = OpenFoodFactsService();
+  final _lookupService = ProductRepository.instance;
   bool _handling = false;
   String? _status;
 
@@ -110,7 +111,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Barcode data may be incomplete. SafeBite will ask you to scan the current label next.',
+                                'Barcode data may be incomplete. SafeBiteAI will ask you to scan the current label next.',
                                 style: TextStyle(
                                     color: AppColors.ink, height: 1.35),
                               ),
@@ -131,7 +132,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           ),
           if (_handling)
             ColoredBox(
-              color: Colors.black.withOpacity(0.56),
+              color: Colors.black.withValues(alpha: 0.56),
               child: const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -160,9 +161,19 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     });
     await _controller.stop();
     try {
-      final product = await _lookupService.lookup(code);
+      final result = await _lookupService.lookup(code);
+      final product = result.product;
       widget.session.saveCheckedProduct(product);
       if (!mounted) return;
+      setState(() {
+        _status = switch (result.origin) {
+          ProductLookupOrigin.offlineCatalog => 'Found in offline catalogue',
+          ProductLookupOrigin.verifiedCatalog =>
+            'Found in SafeBiteAI verified catalogue',
+          ProductLookupOrigin.openFoodFacts => 'Found online and saved offline',
+          ProductLookupOrigin.paidLive => 'Found using live provider data',
+        };
+      });
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) =>
@@ -171,6 +182,10 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       );
     } on ProductLookupException catch (error) {
       if (!mounted) return;
+      setState(() {
+        _handling = false;
+        _status = 'Ready to scan another product';
+      });
       await _showLookupError(code, error.message);
     } finally {
       if (mounted) {
@@ -178,7 +193,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           _handling = false;
           _status = null;
         });
-        await _controller.start();
+        try {
+          await _controller.start();
+        } catch (_) {}
       }
     }
   }
@@ -276,10 +293,10 @@ class _ScannerShade extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Colors.black.withOpacity(0.6),
+              Colors.black.withValues(alpha: 0.6),
               Colors.transparent,
               Colors.transparent,
-              Colors.black.withOpacity(0.72),
+              Colors.black.withValues(alpha: 0.72),
             ],
             stops: const [0, 0.28, 0.58, 1],
           ),
@@ -299,8 +316,9 @@ class _RoundButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       onPressed: onPressed,
-      style:
-          IconButton.styleFrom(backgroundColor: Colors.black.withOpacity(0.35)),
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.black.withValues(alpha: 0.35),
+      ),
       icon: Icon(icon, color: Colors.white),
     );
   }

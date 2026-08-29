@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:firebase_ui_auth/firebase_ui_auth.dart' hide AuthController;
+import 'package:firebase_ui_oauth_apple/firebase_ui_oauth_apple.dart';
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_theme.dart';
 import '../../core/auth_controller.dart';
 import '../../widgets/brand_mark.dart';
+import '../legal/privacy_policy_screen.dart';
 
 class AccountAccessScreen extends StatelessWidget {
   const AccountAccessScreen({
@@ -30,17 +33,21 @@ class AccountAccessScreen extends StatelessWidget {
       );
     }
 
+    final supportsAppleSignIn = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.macOS);
+
     return SignInScreen(
       providers: [
-        EmailAuthProvider(),
         GoogleProvider(
           clientId:
               '491951991132-hn7nv1mdc3jfsosjkf8t5m9c5h1ql59a.apps.googleusercontent.com',
           iOSPreferPlist: true,
         ),
+        if (supportsAppleSignIn) AppleProvider(scopes: const {'email', 'name'}),
       ],
-      showAuthActionSwitch: true,
-      showPasswordVisibilityToggle: true,
+      oauthButtonVariant: OAuthButtonVariant.icon_and_text,
+      showAuthActionSwitch: false,
       headerMaxExtent: 280,
       headerBuilder: (context, constraints, shrinkOffset) {
         return const _AccountHero(compact: true);
@@ -48,30 +55,36 @@ class AccountAccessScreen extends StatelessWidget {
       sideBuilder: (context, constraints) {
         return const _AccountHero();
       },
-      styles: const {
-        EmailFormStyle(signInButtonVariant: ButtonVariant.filled),
-      },
       subtitleBuilder: (context, action) {
         return Padding(
           padding: const EdgeInsets.only(bottom: 18),
           child: Text(
-            action == AuthAction.signUp
-                ? 'Create an account to protect your household.'
-                : 'Welcome back to SafeBite.',
+            supportsAppleSignIn
+                ? 'Continue with Google or Apple. Your account is created automatically.'
+                : 'Continue with Google. Your account is created automatically.',
+            style: Theme.of(context).textTheme.bodyLarge,
           ),
         );
       },
-      footerBuilder: allowGuest
-          ? (context, action) {
-              return Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: TextButton(
+      footerBuilder: (context, action) {
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Column(
+            children: [
+              if (allowGuest)
+                TextButton(
                   onPressed: onComplete,
                   child: const Text('Continue without an account'),
                 ),
-              );
-            }
-          : null,
+              TextButton.icon(
+                onPressed: () => _openPrivacyPolicy(context),
+                icon: const Icon(Icons.privacy_tip_outlined, size: 18),
+                label: const Text('Privacy policy'),
+              ),
+            ],
+          ),
+        );
+      },
       actions: [
         AuthStateChangeAction<SignedIn>((context, state) {
           unawaited(onComplete());
@@ -130,6 +143,12 @@ class _FirebaseUnavailable extends StatelessWidget {
                           child: const Text('Continue without an account'),
                         ),
                       ],
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () => _openPrivacyPolicy(context),
+                        icon: const Icon(Icons.privacy_tip_outlined, size: 18),
+                        label: const Text('Privacy policy'),
+                      ),
                     ],
                   ),
                 ),
@@ -140,6 +159,12 @@ class _FirebaseUnavailable extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _openPrivacyPolicy(BuildContext context) {
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => const PrivacyPolicyScreen()),
+  );
 }
 
 class _AccountHero extends StatelessWidget {
@@ -165,8 +190,8 @@ class _AccountHero extends StatelessWidget {
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
             colors: [
-              AppColors.greenDark.withOpacity(0.96),
-              AppColors.greenDark.withOpacity(0.66),
+              AppColors.greenDark.withValues(alpha: 0.96),
+              AppColors.greenDark.withValues(alpha: 0.66),
               Colors.transparent,
             ],
           ),

@@ -117,7 +117,7 @@ abstract final class AppTheme {
         elevation: 0,
         centerTitle: false,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: const Color(0xFFFEFFFE),
         surfaceTintColor: Colors.white,
         elevation: 1.5,

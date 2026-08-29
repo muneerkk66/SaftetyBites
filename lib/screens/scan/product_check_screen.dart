@@ -8,6 +8,7 @@ import '../../models/family_member.dart';
 import '../../models/product.dart';
 import '../../services/allergen_matcher.dart';
 import '../../services/label_scanner_service.dart';
+import '../../services/product_alternative_service.dart';
 import '../../widgets/member_avatar.dart';
 
 class ProductCheckScreen extends StatefulWidget {
@@ -26,8 +27,12 @@ class ProductCheckScreen extends StatefulWidget {
 
 class _ProductCheckScreenState extends State<ProductCheckScreen> {
   final _labelService = LabelScannerService();
+  final _alternativeService = ProductAlternativeService();
   late ProductInfo _product;
   bool _readingLabel = false;
+  bool _findingAlternatives = false;
+  AlternativeSearchResult? _alternativeResult;
+  String? _alternativeError;
 
   @override
   void initState() {
@@ -59,6 +64,16 @@ class _ProductCheckScreenState extends State<ProductCheckScreen> {
           _ProductHeader(product: _product),
           const SizedBox(height: 18),
           _OverallResult(level: overall),
+          if (overall == MatchLevel.avoid || overall == MatchLevel.caution) ...[
+            const SizedBox(height: 16),
+            _AlternativeFinder(
+              result: _alternativeResult,
+              loading: _findingAlternatives,
+              error: _alternativeError,
+              onFind: _findAlternatives,
+              onOpen: _openAlternative,
+            ),
+          ],
           const SizedBox(height: 25),
           Row(
             children: [
@@ -128,6 +143,8 @@ class _ProductCheckScreenState extends State<ProductCheckScreen> {
       if (scan == null || !mounted) return;
       setState(() {
         _product = _labelService.mergeWithProduct(_product, scan);
+        _alternativeResult = null;
+        _alternativeError = null;
         widget.session.saveCheckedProduct(_product);
       });
     } catch (_) {
@@ -189,8 +206,46 @@ class _ProductCheckScreenState extends State<ProductCheckScreen> {
     final scan = _labelService.fromText(text);
     setState(() {
       _product = _labelService.mergeWithProduct(_product, scan);
+      _alternativeResult = null;
+      _alternativeError = null;
       widget.session.saveCheckedProduct(_product);
     });
+  }
+
+  Future<void> _findAlternatives() async {
+    setState(() {
+      _findingAlternatives = true;
+      _alternativeError = null;
+    });
+    try {
+      final result = await _alternativeService.findAlternatives(
+        source: _product,
+        family: widget.session.family,
+      );
+      if (!mounted) return;
+      setState(() => _alternativeResult = result);
+    } on ProductAlternativeException catch (error) {
+      if (!mounted) return;
+      setState(() => _alternativeError = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _alternativeError =
+            'Alternatives are unavailable right now. Please try again shortly.';
+      });
+    } finally {
+      if (mounted) setState(() => _findingAlternatives = false);
+    }
+  }
+
+  Future<void> _openAlternative(ProductInfo product) async {
+    widget.session.saveCheckedProduct(product);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ProductCheckScreen(session: widget.session, product: product),
+      ),
+    );
   }
 
   MatchLevel _overallLevel(List<MemberAssessment> assessments) {
@@ -212,13 +267,243 @@ class _ProductCheckScreenState extends State<ProductCheckScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Important'),
         content: const Text(
-          'SafeBite checks available product data and visible label text. It cannot guarantee that a food is safe. Always verify the current package and follow professional medical advice.',
+          'SafeBiteAI checks available product data and visible label text. It cannot guarantee that a food is safe. Always verify the current package and follow professional medical advice.',
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('I understand')),
         ],
+      ),
+    );
+  }
+}
+
+class _AlternativeFinder extends StatelessWidget {
+  const _AlternativeFinder({
+    required this.result,
+    required this.loading,
+    required this.error,
+    required this.onFind,
+    required this.onOpen,
+  });
+
+  final AlternativeSearchResult? result;
+  final bool loading;
+  final String? error;
+  final VoidCallback onFind;
+  final ValueChanged<ProductInfo> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final recommendations = result?.recommendations ?? const [];
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: AppGradients.primarySoft,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.aqua),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: const BoxDecoration(
+                  color: AppColors.greenDark,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.auto_awesome_rounded,
+                    color: AppColors.acid, size: 23),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Find a better alternative',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 4),
+                    Text(
+                      'SafeBiteAI first removes products with listed household allergens and traces, then AI ranks the closest matches.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child:
+                  Text(error!, style: Theme.of(context).textTheme.bodyMedium),
+            ),
+          ],
+          if (recommendations.isEmpty) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: loading ? null : onFind,
+              icon: loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.greenDark,
+                      ),
+                    )
+                  : const Icon(Icons.search_rounded),
+              label: Text(loading
+                  ? 'Finding alternatives…'
+                  : error == null
+                      ? 'Find alternatives'
+                      : 'Try again'),
+            ),
+          ] else ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text('Recommended matches',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: result!.usedAiRanking
+                        ? AppColors.greenDark
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    result!.usedAiRanking ? 'AI RANKED' : 'RULE FILTERED',
+                    style: TextStyle(
+                      color: result!.usedAiRanking
+                          ? AppColors.acid
+                          : AppColors.green,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...recommendations.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 9),
+                  child: _AlternativeCard(
+                    recommendation: item,
+                    onOpen: () => onOpen(item.product),
+                  ),
+                )),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: loading ? null : onFind,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Refresh matches'),
+              ),
+            ),
+          ],
+          const SizedBox(height: 9),
+          Text(
+            'AI receives product details only—not family profiles, allergy choices or location. Always verify the latest package before purchase.',
+            style:
+                Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlternativeCard extends StatelessWidget {
+  const _AlternativeCard({
+    required this.recommendation,
+    required this.onOpen,
+  });
+
+  final AlternativeRecommendation recommendation;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final product = recommendation.product;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(11),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(13),
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  color: AppColors.greenSoft,
+                  child: product.imageUrl == null
+                      ? const Icon(Icons.shopping_bag_outlined,
+                          color: AppColors.green)
+                      : Image.network(
+                          product.imageUrl!,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.shopping_bag_outlined,
+                            color: AppColors.green,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(product.brand,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium),
+                    const SizedBox(height: 5),
+                    Text(
+                      recommendation.reason,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.green,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 5),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.green),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -403,6 +688,11 @@ class _DataSourceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isOpenFoodFacts = product.dataSource.contains('Open Food Facts');
+    final isPaidLive = product.dataSource.contains('FatSecret');
+    final detail = isOpenFoodFacts
+        ? 'Product data: ${product.dataSource}, available under the Open Database Licence. Product images are available under CC BY-SA. Community data may be incomplete or outdated; the current package label takes priority.'
+        : 'Product data: ${product.dataSource}. This result is shown live and is not saved to SafeBiteAI’s product database. Allergen coverage may be incomplete, so verify the current package label.';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -417,12 +707,36 @@ class _DataSourceCard extends StatelessWidget {
               color: AppColors.inkSoft, size: 21),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              'Initial product data: ${product.dataSource}. Community product data may be incomplete or outdated; the current package label takes priority.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(fontSize: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (isPaidLive) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.greenDark,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'FATSECRET LIVE · PAID LOOKUP',
+                      style: TextStyle(
+                        color: AppColors.acid,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Text(
+                  detail,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontSize: 12),
+                ),
+              ],
             ),
           ),
         ],
@@ -482,11 +796,11 @@ class _ResultConfig {
           background: AppColors.greenSoft,
         ),
       MatchLevel.unableToVerify => const _ResultConfig(
-          title: 'Unable to verify',
+          title: 'Product found — label needed',
           detail:
-              'Ingredient information is missing. Scan the current label to continue.',
+              'We identified the product, but its online ingredient list is missing. Scan the current package label to check it safely.',
           shortDetail: 'More label information needed',
-          badge: 'UNKNOWN',
+          badge: 'LABEL NEEDED',
           icon: Icons.question_mark_rounded,
           color: AppColors.inkSoft,
           background: AppColors.line,

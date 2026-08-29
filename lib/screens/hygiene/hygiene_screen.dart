@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_session.dart';
 import '../../core/app_theme.dart';
 import '../../models/food_establishment.dart';
 import '../../services/food_hygiene_service.dart';
+import '../../services/postcode_lookup_service.dart';
+import '../../services/venue_map_links.dart';
+import '../../services/venue_photo_service.dart';
 import '../../widgets/brand_mark.dart';
 
 class HygieneScreen extends StatefulWidget {
@@ -18,34 +24,42 @@ class HygieneScreen extends StatefulWidget {
 
 class _HygieneScreenState extends State<HygieneScreen> {
   final _service = FoodHygieneService();
+  final _postcodeService = PostcodeLookupService();
+  final _photoService = VenuePhotoService();
   late final TextEditingController _searchController;
 
-  HygieneSearchField _searchField = HygieneSearchField.address;
   List<FoodEstablishment> _establishments = const [];
   FoodHygienePage? _page;
   bool _isLoading = false;
   bool _isLoadingMore = false;
-  bool _usingLocation = false;
   String? _error;
   String _resultLabel = '';
   double? _latitude;
   double? _longitude;
   String _lastQuery = '';
-  HygieneSearchField _lastSearchField = HygieneSearchField.address;
+  final Map<int, VenuePhoto> _venuePhotos = {};
+  final Set<int> _resolvedVenuePhotoIds = {};
 
   @override
   void initState() {
     super.initState();
-    _searchController = TextEditingController(text: widget.session.postcode);
-    if (widget.session.postcode.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _search(page: 1));
-    }
+    _searchController = TextEditingController();
+    _latitude = widget.session.latitude;
+    _longitude = widget.session.longitude;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.session.hasLocation) {
+        _loadNearby(page: 1);
+      } else {
+        _useCurrentLocation();
+      }
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _service.close();
+    _postcodeService.close();
     super.dispose();
   }
 
@@ -82,7 +96,7 @@ class _HygieneScreenState extends State<HygieneScreen> {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: AppColors.greenDark.withOpacity(0.18),
+            color: AppColors.greenDark.withValues(alpha: 0.18),
             blurRadius: 26,
             offset: const Offset(0, 12),
           ),
@@ -115,7 +129,7 @@ class _HygieneScreenState extends State<HygieneScreen> {
                 Text(
                   'Official UK food hygiene ratings for restaurants, cafés, takeaways and food shops.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withOpacity(0.78),
+                        color: Colors.white.withValues(alpha: 0.78),
                       ),
                 ),
               ],
@@ -147,67 +161,76 @@ class _HygieneScreenState extends State<HygieneScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            FilledButton.icon(
-              onPressed: _isLoading ? null : _useCurrentLocation,
-              icon: const Icon(Icons.my_location_rounded),
-              label: const Text('Find food places near me'),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 17),
-              child: Row(
-                children: [
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      'OR SEARCH',
-                      style: TextStyle(
-                        color: AppColors.inkSoft,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
-                      ),
-                    ),
+            Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: AppColors.greenSoft,
+                    borderRadius: BorderRadius.circular(15),
                   ),
-                  Expanded(child: Divider()),
-                ],
-              ),
-            ),
-            SegmentedButton<HygieneSearchField>(
-              segments: const [
-                ButtonSegment(
-                  value: HygieneSearchField.address,
-                  icon: Icon(Icons.location_on_outlined),
-                  label: Text('Area'),
+                  child: const Icon(
+                    Icons.my_location_rounded,
+                    color: AppColors.green,
+                  ),
                 ),
-                ButtonSegment(
-                  value: HygieneSearchField.name,
-                  icon: Icon(Icons.storefront_outlined),
-                  label: Text('Restaurant'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.session.hasLocation
+                            ? widget.session.locationLabel
+                            : 'Location required',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Showing food businesses within 5 miles',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: _isLoading ? null : _showAreaEditor,
+                  child: const Text('Update'),
                 ),
               ],
-              selected: {_searchField},
-              onSelectionChanged: (selection) {
-                setState(() => _searchField = selection.first);
-              },
             ),
-            const SizedBox(height: 13),
+            const SizedBox(height: 17),
             TextField(
               controller: _searchController,
               textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _search(page: 1),
+              onSubmitted: (_) => _loadNearby(page: 1),
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: _searchField == HygieneSearchField.address
-                    ? 'Town, street or postcode'
-                    : 'Restaurant or food business name',
+                hintText: 'Search food business name',
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: IconButton(
-                  tooltip: 'Search',
-                  onPressed: _isLoading ? null : () => _search(page: 1),
-                  icon: const Icon(Icons.arrow_forward_rounded),
+                  tooltip: 'Search nearby',
+                  onPressed: _isLoading ? null : () => _loadNearby(page: 1),
+                  icon: const Icon(Icons.search_rounded),
                 ),
               ),
             ),
+            if (_searchController.text.trim().isNotEmpty)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          _searchController.clear();
+                          setState(() {});
+                          _loadNearby(page: 1);
+                        },
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('Show all nearby'),
+                ),
+              ),
           ],
         ),
       ),
@@ -232,9 +255,9 @@ class _HygieneScreenState extends State<HygieneScreen> {
 
     if (_page == null) {
       return const _MessageCard(
-        icon: Icons.travel_explore_rounded,
-        title: 'Discover trusted food places',
-        message: 'Use your location or search to see official hygiene ratings.',
+        icon: Icons.location_searching_rounded,
+        title: 'Finding food places nearby',
+        message: 'Allow location access to see official hygiene ratings.',
       );
     }
 
@@ -243,7 +266,7 @@ class _HygieneScreenState extends State<HygieneScreen> {
         icon: Icons.search_off_rounded,
         title: 'No places found',
         message:
-            'Try another spelling, a nearby town or a wider postcode area.',
+            'Clear the restaurant name to show every place within 5 miles.',
       );
     }
 
@@ -288,7 +311,12 @@ class _HygieneScreenState extends State<HygieneScreen> {
         ..._establishments.map(
           (establishment) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _EstablishmentCard(establishment: establishment),
+            child: _EstablishmentCard(
+              key: ValueKey(establishment.id),
+              establishment: establishment,
+              photo: _venuePhotos[establishment.id],
+              photoResolved: _resolvedVenuePhotoIds.contains(establishment.id),
+            ),
           ),
         ),
         if (_page!.hasMore)
@@ -308,19 +336,26 @@ class _HygieneScreenState extends State<HygieneScreen> {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12),
         ),
+        const SizedBox(height: 8),
+        Text(
+          'Food hygiene data © Food Standards Agency, used under the Open Government Licence.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.inkSoft,
+                fontSize: 11,
+              ),
+        ),
       ],
     );
   }
 
-  Future<void> _search({
+  Future<void> _loadNearby({
     required int page,
     bool append = false,
-    HygieneSearchField? field,
   }) async {
     final query = _searchController.text.trim();
-    final searchField = field ?? _searchField;
-    if (query.isEmpty) {
-      setState(() => _error = 'Enter a restaurant, town or postcode.');
+    if (_latitude == null || _longitude == null) {
+      await _useCurrentLocation();
       return;
     }
 
@@ -334,24 +369,23 @@ class _HygieneScreenState extends State<HygieneScreen> {
     }
 
     try {
-      final result = await _service.search(
-        query: query,
-        field: searchField,
+      final result = await _service.nearby(
+        latitude: _latitude!,
+        longitude: _longitude!,
+        name: query,
         page: page,
       );
       if (!mounted) return;
       setState(() {
-        _usingLocation = false;
         _lastQuery = query;
-        _lastSearchField = searchField;
         _page = result;
         _establishments = append
             ? [..._establishments, ...result.establishments]
             : result.establishments;
-        _resultLabel = searchField == HygieneSearchField.address
-            ? query.toUpperCase()
-            : '“$query”';
+        _resultLabel =
+            query.isEmpty ? 'within 5 miles' : '“$query” within 5 miles';
       });
+      unawaited(_loadVenuePhotos(result.establishments));
     } on FoodHygieneException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -364,64 +398,49 @@ class _HygieneScreenState extends State<HygieneScreen> {
     }
   }
 
-  Future<void> _useCurrentLocation({int page = 1, bool append = false}) async {
-    if (append) {
-      setState(() => _isLoadingMore = true);
-    } else {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
-    }
+  Future<void> _useCurrentLocation() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
-      if (!append) {
-        final servicesEnabled = await Geolocator.isLocationServiceEnabled();
-        if (!servicesEnabled) {
-          throw const FoodHygieneException(
-            'Location services are turned off. Enable them or search by area.',
-          );
-        }
-
-        var permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
-        }
-        if (permission == LocationPermission.denied ||
-            permission == LocationPermission.deniedForever) {
-          throw const FoodHygieneException(
-            'Location permission is needed for nearby results. You can still search by area.',
-          );
-        }
-
-        final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
+      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!servicesEnabled) {
+        throw const FoodHygieneException(
+          'Location services are turned off. Enable them and try again.',
         );
-        _latitude = position.latitude;
-        _longitude = position.longitude;
       }
 
-      final result = await _service.nearby(
-        latitude: _latitude!,
-        longitude: _longitude!,
-        page: page,
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw const FoodHygieneException(
+          'Location permission is needed to show hygiene ratings near you.',
+        );
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      _latitude = position.latitude;
+      _longitude = position.longitude;
+      await widget.session.updateLocation(
+        latitude: position.latitude,
+        longitude: position.longitude,
       );
       if (!mounted) return;
-      setState(() {
-        _usingLocation = true;
-        _page = result;
-        _establishments = append
-            ? [..._establishments, ...result.establishments]
-            : result.establishments;
-        _resultLabel = 'within 5 miles';
-      });
+      await _loadNearby(page: 1);
     } on FoodHygieneException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {
       if (mounted) {
         setState(() {
           _error =
-              'Could not access your location. Check permission or search by area.';
+              'Could not access your location. Check permission and retry.';
         });
       }
     } finally {
@@ -434,25 +453,179 @@ class _HygieneScreenState extends State<HygieneScreen> {
     }
   }
 
+  Future<void> _showAreaEditor() async {
+    final location = await showModalBottomSheet<PostcodeLocation>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: AppColors.canvas,
+      builder: (_) => _PostcodeAreaEditor(
+        service: _postcodeService,
+        initialPostcode: widget.session.postcode,
+      ),
+    );
+    if (!mounted || location == null) return;
+
+    _latitude = location.latitude;
+    _longitude = location.longitude;
+    await widget.session.updateLocation(
+      latitude: location.latitude,
+      longitude: location.longitude,
+      postcode: location.postcode,
+    );
+    if (!mounted) return;
+    await _loadNearby(page: 1);
+  }
+
   Future<void> _loadMore() async {
     final nextPage = (_page?.pageNumber ?? 0) + 1;
-    if (_usingLocation) {
-      await _useCurrentLocation(page: nextPage, append: true);
-    } else {
-      _searchController.text = _lastQuery;
-      await _search(
-        page: nextPage,
-        append: true,
-        field: _lastSearchField,
+    _searchController.text = _lastQuery;
+    await _loadNearby(page: nextPage, append: true);
+  }
+
+  Future<void> _loadVenuePhotos(
+    List<FoodEstablishment> establishments,
+  ) async {
+    final missing = establishments
+        .where((establishment) => !_venuePhotos.containsKey(establishment.id))
+        .toList();
+    if (missing.isEmpty) return;
+
+    final photos = await _photoService.fetchFor(missing);
+    if (!mounted) return;
+    setState(() {
+      _venuePhotos.addAll(photos);
+      _resolvedVenuePhotoIds.addAll(
+        missing.map((establishment) => establishment.id),
       );
+    });
+  }
+}
+
+class _PostcodeAreaEditor extends StatefulWidget {
+  const _PostcodeAreaEditor({
+    required this.service,
+    required this.initialPostcode,
+  });
+
+  final PostcodeLookupService service;
+  final String initialPostcode;
+
+  @override
+  State<_PostcodeAreaEditor> createState() => _PostcodeAreaEditorState();
+}
+
+class _PostcodeAreaEditorState extends State<_PostcodeAreaEditor> {
+  late final TextEditingController _controller;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialPostcode);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        22,
+        16,
+        22,
+        MediaQuery.viewInsetsOf(context).bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('Update your area',
+                style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 7),
+            Text(
+              'Enter another UK postcode to check food hygiene ratings in that area.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _submit(),
+              decoration: const InputDecoration(
+                labelText: 'UK postcode',
+                hintText: 'e.g. SW1A 1AA',
+                prefixIcon: Icon(Icons.location_on_outlined),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!, style: const TextStyle(color: AppColors.danger)),
+            ],
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: _loading ? null : _submit,
+              child: _loading
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Update postcode'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final location = await widget.service.lookup(_controller.text);
+      if (mounted) Navigator.pop(context, location);
+    } on PostcodeLookupException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 }
 
 class _EstablishmentCard extends StatelessWidget {
-  const _EstablishmentCard({required this.establishment});
+  const _EstablishmentCard({
+    super.key,
+    required this.establishment,
+    required this.photo,
+    required this.photoResolved,
+  });
 
   final FoodEstablishment establishment;
+  final VenuePhoto? photo;
+  final bool photoResolved;
 
   @override
   Widget build(BuildContext context) {
@@ -464,119 +637,189 @@ class _EstablishmentCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 68,
-              height: 76,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: color.withOpacity(0.4)),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (establishment.hasNumericRating) ...[
-                    Text(
-                      establishment.rating,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 30,
-                        height: 1,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      'OUT OF 5',
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ] else ...[
-                    Icon(Icons.verified_rounded, color: color, size: 28),
-                    const SizedBox(height: 4),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Text(
-                        establishment.rating.toUpperCase(),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+            _VenuePhoto(
+              photo: photo,
+              photoResolved: photoResolved,
+              businessType: establishment.businessType,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    establishment.name,
-                    style: Theme.of(context).textTheme.titleMedium,
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 68,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: color.withValues(alpha: 0.4)),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    establishment.businessType,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.green,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  if (address.isNotEmpty) ...[
-                    const SizedBox(height: 7),
-                    Text(
-                      address,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                  const SizedBox(height: 9),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        establishment.ratingSummary,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                      if (establishment.hasNumericRating) ...[
+                        Text(
+                          establishment.rating,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 30,
+                            height: 1,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      ),
-                      if (distance != null)
-                        _SmallChip(
-                          icon: Icons.near_me_outlined,
-                          label: '${distance.toStringAsFixed(1)} mi',
+                        Text(
+                          'OUT OF 5',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      if (establishment.newRatingPending)
-                        const _SmallChip(
-                          icon: Icons.update_rounded,
-                          label: 'New rating pending',
+                      ] else ...[
+                        Icon(Icons.verified_rounded, color: color, size: 28),
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            establishment.rating.toUpperCase(),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
+                      ],
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        establishment.name,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        establishment.businessType,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppColors.green,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      if (address.isNotEmpty) ...[
+                        const SizedBox(height: 7),
+                        Text(
+                          address,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                      const SizedBox(height: 9),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            establishment.ratingSummary,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (distance != null)
+                            _SmallChip(
+                              icon: Icons.near_me_outlined,
+                              label: '${distance.toStringAsFixed(1)} mi',
+                            ),
+                          if (establishment.newRatingPending)
+                            const _SmallChip(
+                              icon: Icons.update_rounded,
+                              label: 'New rating pending',
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            FilledButton.tonalIcon(
+              onPressed: () => _showDirections(context),
+              icon: const Icon(Icons.directions_outlined),
+              label: const Text('Get directions'),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showDirections(BuildContext context) async {
+    final destination = await showModalBottomSheet<Uri>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Directions to ${establishment.name}',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.map_outlined),
+                title: const Text('Apple Maps'),
+                subtitle: const Text('Open driving directions'),
+                onTap: () => Navigator.pop(
+                  sheetContext,
+                  VenueMapLinks.appleDirections(establishment),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.location_on_outlined),
+                title: const Text('Google Maps'),
+                subtitle: const Text('Open driving directions'),
+                onTap: () => Navigator.pop(
+                  sheetContext,
+                  VenueMapLinks.googleDirections(establishment),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (destination != null && context.mounted) {
+      await _openUrl(context, destination);
+    }
+  }
+
+  Future<void> _openUrl(BuildContext context, Uri uri) async {
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open maps on this device.')),
+      );
+    }
   }
 
   Color _ratingColor(FoodEstablishment establishment) {
@@ -591,6 +834,119 @@ class _EstablishmentCard extends StatelessWidget {
     if (rating.contains('pass')) return AppColors.green;
     if (rating.contains('improvement')) return AppColors.danger;
     return AppColors.inkSoft;
+  }
+}
+
+class _VenuePhoto extends StatelessWidget {
+  const _VenuePhoto({
+    required this.photo,
+    required this.photoResolved,
+    required this.businessType,
+  });
+
+  final VenuePhoto? photo;
+  final bool photoResolved;
+  final String businessType;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: AspectRatio(
+        aspectRatio: 16 / 8.5,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (!photoResolved)
+              const _VenuePhotoLoading()
+            else if (photo == null)
+              const _VenuePhotoFallback()
+            else
+              Image.network(
+                photo!.url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const _VenuePhotoFallback(),
+                loadingBuilder: (context, child, progress) =>
+                    progress == null ? child : const _VenuePhotoFallback(),
+              ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Color(0x990B2517)],
+                  stops: [0.45, 1],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 14,
+              bottom: 12,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  businessType,
+                  style: const TextStyle(
+                    color: AppColors.greenDark,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            if (photo != null && photo!.attribution.isNotEmpty)
+              Positioned(
+                right: 10,
+                bottom: 8,
+                child: Text(
+                  'Photo: ${photo!.attribution}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w600,
+                    shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VenuePhotoLoading extends StatelessWidget {
+  const _VenuePhotoLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: AppColors.greenSoft,
+      child: Center(
+        child: SizedBox.square(
+          dimension: 24,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
+      ),
+    );
+  }
+}
+
+class _VenuePhotoFallback extends StatelessWidget {
+  const _VenuePhotoFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/images/safebite-venue-placeholder-v1.png',
+      fit: BoxFit.cover,
+      alignment: Alignment.center,
+    );
   }
 }
 

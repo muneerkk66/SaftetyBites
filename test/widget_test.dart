@@ -7,7 +7,8 @@ import 'package:safebite/core/app_session.dart';
 import 'package:safebite/core/auth_controller.dart';
 
 void main() {
-  testWidgets('shows the family-first onboarding', (tester) async {
+  testWidgets('shows the product introduction before account access',
+      (tester) async {
     tester.view.physicalSize = const Size(1200, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -16,10 +17,20 @@ void main() {
     final session = await AppSession.load();
     final auth = AuthController.guest();
 
-    await tester.pumpWidget(SafeBiteApp(session: session, auth: auth));
+    await tester.pumpWidget(SafeBiteAIApp(session: session, auth: auth));
     await tester.pumpAndSettle();
 
-    expect(find.text('SafeBite'), findsOneWidget);
+    expect(find.text('SafeBiteAI'), findsOneWidget);
+    expect(find.text('Know before\nyou bite.'), findsOneWidget);
+    expect(find.text('See how SafeBiteAI protects you'), findsOneWidget);
+
+    await tester.tap(find.text('See how SafeBiteAI protects you'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set up your protection'), findsOneWidget);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
     expect(find.text('Account access is unavailable.'), findsOneWidget);
 
     final guestButton = find.text('Continue without an account');
@@ -27,7 +38,6 @@ void main() {
     await tester.tap(guestButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Love the food.\nLose the worry.'), findsOneWidget);
-    expect(find.text('Set up my household'), findsOneWidget);
+    expect(find.text('Where do you shop?'), findsOneWidget);
   });
 }

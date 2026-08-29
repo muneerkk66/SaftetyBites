@@ -19,10 +19,25 @@ class AuthController extends ChangeNotifier {
   StreamSubscription<User?>? _subscription;
   User? user;
   bool isConfigured = false;
-  bool isBusy = false;
   String? configurationMessage;
 
   bool get isSignedIn => user != null;
+
+  String get greetingName {
+    final firebaseName = user?.displayName?.trim() ?? '';
+    if (firebaseName.isNotEmpty) {
+      return firebaseName.split(RegExp(r'\s+')).first;
+    }
+
+    final emailName = user?.email?.split('@').first.trim() ?? '';
+    if (emailName.isEmpty) return '';
+    final readable = emailName.replaceAll(RegExp(r'[._-]+'), ' ');
+    return readable
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
 
   static Future<AuthController> load() async {
     final controller = AuthController._();
@@ -48,62 +63,6 @@ class AuthController extends ChangeNotifier {
   Future<void> signOut() async {
     if (_auth == null) return;
     await _auth!.signOut();
-  }
-
-  Future<void> signIn({required String email, required String password}) {
-    return _run(
-      () => _auth!.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      ),
-    );
-  }
-
-  Future<void> createAccount({
-    required String email,
-    required String password,
-  }) {
-    return _run(
-      () => _auth!.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      ),
-    );
-  }
-
-  Future<void> _run(Future<UserCredential> Function() operation) async {
-    if (_auth == null) {
-      throw StateError('Firebase Authentication is not configured.');
-    }
-    isBusy = true;
-    notifyListeners();
-    try {
-      await operation();
-    } finally {
-      isBusy = false;
-      notifyListeners();
-    }
-  }
-
-  static String messageFor(Object error) {
-    if (error is FirebaseAuthException) {
-      return switch (error.code) {
-        'invalid-email' => 'Enter a valid email address.',
-        'user-not-found' ||
-        'wrong-password' ||
-        'invalid-credential' =>
-          'The email or password is incorrect.',
-        'email-already-in-use' =>
-          'An account already exists for this email address.',
-        'weak-password' => 'Use a password with at least 6 characters.',
-        'operation-not-allowed' =>
-          'Enable Email/Password in Firebase Authentication first.',
-        'network-request-failed' =>
-          'Check your internet connection and try again.',
-        _ => error.message ?? 'Authentication could not be completed.',
-      };
-    }
-    return 'Authentication could not be completed.';
   }
 
   @override

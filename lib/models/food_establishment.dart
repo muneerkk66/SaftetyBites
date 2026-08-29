@@ -11,6 +11,8 @@ class FoodEstablishment {
     required this.schemeType,
     required this.newRatingPending,
     this.distanceMiles,
+    this.latitude,
+    this.longitude,
   });
 
   final int id;
@@ -24,6 +26,10 @@ class FoodEstablishment {
   final String schemeType;
   final bool newRatingPending;
   final double? distanceMiles;
+  final double? latitude;
+  final double? longitude;
+
+  bool get hasCoordinates => latitude != null && longitude != null;
 
   bool get hasNumericRating => int.tryParse(rating) != null;
 
@@ -55,6 +61,7 @@ class FoodEstablishment {
   }
 
   factory FoodEstablishment.fromJson(Map<String, dynamic> json) {
+    final geocode = json['geocode'] as Map<String, dynamic>? ?? const {};
     final addressParts = [
       json['AddressLine1'],
       json['AddressLine2'],
@@ -78,6 +85,8 @@ class FoodEstablishment {
       schemeType: _asString(json['SchemeType'], fallback: 'FHRS'),
       newRatingPending: json['NewRatingPending'] == true,
       distanceMiles: _asDouble(json['Distance']),
+      latitude: _asDouble(geocode['latitude'] ?? geocode['Latitude']),
+      longitude: _asDouble(geocode['longitude'] ?? geocode['Longitude']),
     );
   }
 

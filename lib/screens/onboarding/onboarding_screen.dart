@@ -4,44 +4,61 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../core/app_session.dart';
 import '../../core/app_theme.dart';
+import '../../core/auth_controller.dart';
 import '../../models/family_member.dart';
+import '../../services/food_hygiene_service.dart';
+import '../../services/nearby_store_matcher.dart';
 import '../../widgets/allergen_selector.dart';
 import '../../widgets/brand_mark.dart';
+import '../legal/privacy_policy_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key, required this.session});
+  const OnboardingScreen({
+    super.key,
+    required this.session,
+    required this.auth,
+  });
 
   final AppSession session;
+  final AuthController auth;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const _stores = [
-    'Tesco',
-    'Aldi',
-    'Asda',
-    'Sainsbury’s',
-    'Lidl',
-    'Morrisons',
-    'Waitrose',
-    'Iceland',
-    'Co-op',
-    'M&S',
-  ];
-
-  final _postcodeController = TextEditingController();
-  final _nameController = TextEditingController(text: 'You');
+  final _hygieneService = FoodHygieneService();
+  late final TextEditingController _nameController;
   int _step = 0;
   bool _locating = false;
+  bool _loadingStores = false;
   bool _saving = false;
-  final Set<String> _storesSelected = {'Tesco', 'Aldi', 'Asda', 'Sainsbury’s'};
+  double _storeRadiusMiles = 5;
+  String _detectedPostcode = '';
+  double? _latitude;
+  double? _longitude;
+  String? _locationError;
+  List<NearbyStoreMatch> _nearbyStores = const [];
+  final Set<String> _storesSelected = {};
   Set<String> _allergensSelected = {};
+  bool _healthDataConsent = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final accountName = widget.auth.greetingName;
+    _nameController = TextEditingController(
+      text: accountName.isEmpty ? 'You' : accountName,
+    );
+    _detectedPostcode = widget.session.postcode;
+    _latitude = widget.session.latitude;
+    _longitude = widget.session.longitude;
+    _storeRadiusMiles = widget.session.storeRadiusMiles;
+  }
 
   @override
   void dispose() {
-    _postcodeController.dispose();
+    _hygieneService.close();
     _nameController.dispose();
     super.dispose();
   }
@@ -71,8 +88,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: KeyedSubtree(
                     key: ValueKey(_step),
                     child: switch (_step) {
-                      0 => _WelcomeStep(onContinue: _next),
-                      1 => _buildLocationStep(),
+                      0 => _buildLocationStep(),
                       _ => _buildProfileStep(),
                     },
                   ),
@@ -105,45 +121,66 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ?.copyWith(color: AppColors.inkSoft),
               ),
               const SizedBox(height: 24),
-              TextField(
-                controller: _postcodeController,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: 'Home postcode',
-                  hintText: 'e.g. M1 1AE',
-                  prefixIcon:
-                      Icon(Icons.location_on_outlined, color: AppColors.green),
+              _buildLocationStatus(),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _openPrivacyPolicy,
+                  icon: const Icon(Icons.privacy_tip_outlined, size: 18),
+                  label: const Text('How location data is used'),
                 ),
               ),
-              const SizedBox(height: 11),
-              OutlinedButton.icon(
-                onPressed: _locating ? null : _useCurrentLocation,
-                icon: _locating
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.my_location_rounded,
-                        color: AppColors.green),
-                label: Text(_locating
-                    ? 'Finding your area…'
-                    : 'Use my current location'),
-              ),
               const SizedBox(height: 28),
-              Text('Your supermarkets',
+              Text(
+                  _nearbyStores.isEmpty
+                      ? 'Choose your supermarkets'
+                      : 'Supermarkets near you',
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 5),
               Text(
-                'Select every store your household may use.',
+                _nearbyStores.isEmpty
+                    ? 'Nothing is selected automatically. Choose every store your household may use.'
+                    : 'Nearby brands are shown first. Select only the stores your household uses.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
+              if (_latitude != null && _longitude != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Store not listed? Increase the search distance. Each retailer brand is shown once, even when several branches are nearby.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.inkSoft,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 9),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: NearbyStoreMatcher.supportedRadiusMiles
+                      .map(
+                        (radius) => ChoiceChip(
+                          selected: _storeRadiusMiles == radius,
+                          label: Text('${radius.toInt()} miles'),
+                          onSelected: _loadingStores
+                              ? null
+                              : (_) => _changeStoreRadius(radius),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
               const SizedBox(height: 14),
+              if (_loadingStores)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: LinearProgressIndicator(),
+                ),
               Wrap(
                 spacing: 9,
                 runSpacing: 9,
-                children: _stores.map((store) {
+                children: _orderedStores.map((store) {
                   final selected = _storesSelected.contains(store);
+                  final distance = _distanceForStore(store);
                   return FilterChip(
                     selected: selected,
                     showCheckmark: false,
@@ -152,7 +189,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       size: 18,
                       color: selected ? Colors.white : AppColors.green,
                     ),
-                    label: Text(store),
+                    label: Text(
+                      distance == null
+                          ? store
+                          : '$store · ${distance.toStringAsFixed(1)} mi',
+                    ),
                     selectedColor: AppColors.green,
                     backgroundColor: Colors.white,
                     side: BorderSide(
@@ -175,8 +216,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 32),
               FilledButton(
-                  onPressed: _canContinueLocation ? _next : null,
-                  child: const Text('Continue')),
+                onPressed: _canContinueLocation ? _next : null,
+                child: Text(
+                  _storesSelected.isEmpty
+                      ? 'Choose at least one store'
+                      : 'Continue',
+                ),
+              ),
             ],
           ),
         ),
@@ -231,8 +277,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const SizedBox(height: 13),
               AllergenSelector(
                 selectedIds: _allergensSelected,
-                onChanged: (value) =>
-                    setState(() => _allergensSelected = value),
+                onChanged: (value) => setState(() {
+                  _allergensSelected = value;
+                  if (value.isEmpty) _healthDataConsent = false;
+                }),
+              ),
+              if (_allergensSelected.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: CheckboxListTile(
+                    value: _healthDataConsent,
+                    onChanged: (value) => setState(
+                      () => _healthDataConsent = value ?? false,
+                    ),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text(
+                      'I explicitly consent to SafeBiteAI processing the allergy information I enter for household checks.',
+                    ),
+                    subtitle: const Text(
+                      'These choices stay on this device. Consent can be withdrawn by deleting the profile or resetting SafeBiteAI.',
+                    ),
+                  ),
+                ),
+              ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _openPrivacyPolicy,
+                  icon: const Icon(Icons.privacy_tip_outlined, size: 19),
+                  label: const Text('Read privacy policy'),
+                ),
               ),
               const SizedBox(height: 24),
               Container(
@@ -248,7 +327,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     SizedBox(width: 11),
                     Expanded(
                       child: Text(
-                        'SafeBite supports label checking, but ingredients and recipes can change. Always verify the current package before eating.',
+                        'SafeBiteAI supports label checking, but ingredients and recipes can change. Always verify the current package before eating.',
                         style: TextStyle(color: AppColors.ink, height: 1.4),
                       ),
                     ),
@@ -257,7 +336,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 28),
               FilledButton(
-                onPressed: _saving || _nameController.text.trim().isEmpty
+                onPressed: _saving ||
+                        _nameController.text.trim().isEmpty ||
+                        (_allergensSelected.isNotEmpty && !_healthDataConsent)
                     ? null
                     : _finish,
                 child: _saving
@@ -267,7 +348,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2),
                       )
-                    : const Text('Set up SafeBite'),
+                    : const Text('Set up SafeBiteAI'),
               ),
             ],
           ),
@@ -276,54 +357,233 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  bool get _canContinueLocation =>
-      _postcodeController.text.trim().isNotEmpty && _storesSelected.isNotEmpty;
+  List<String> get _orderedStores {
+    final nearbyNames = _nearbyStores.map((store) => store.name).toList();
+    if (nearbyNames.isEmpty) return NearbyStoreMatcher.supportedBrands;
+    return [
+      ...nearbyNames,
+      ..._storesSelected.where((store) => !nearbyNames.contains(store)),
+    ];
+  }
 
-  void _next() => setState(() => _step += 1);
+  double? _distanceForStore(String store) {
+    for (final match in _nearbyStores) {
+      if (match.name == store) return match.distanceMiles;
+    }
+    return null;
+  }
+
+  bool get _canContinueLocation =>
+      !_locating && !_loadingStores && _storesSelected.isNotEmpty;
+
+  void _next() {
+    setState(() => _step += 1);
+  }
+
+  Widget _buildLocationStatus() {
+    if (_locating) {
+      return const _LocationStatusCard(
+        icon: Icons.radar_rounded,
+        title: 'Finding your location',
+        detail: 'Detecting your area and nearby supermarkets…',
+        loading: true,
+      );
+    }
+
+    if (_latitude != null && _longitude != null) {
+      return _LocationStatusCard(
+        icon: Icons.location_on_rounded,
+        title: _detectedPostcode.isEmpty ? 'Location ready' : _detectedPostcode,
+        detail: _nearbyStores.isEmpty
+            ? 'GPS is ready. Choose the supermarket brands you use.'
+            : '${_nearbyStores.length} nearby supermarket brand${_nearbyStores.length == 1 ? '' : 's'} found within ${_storeRadiusMiles.toInt()} miles.',
+        actionLabel: 'Refresh',
+        onAction: _useCurrentLocation,
+      );
+    }
+
+    return _LocationStatusCard(
+      icon: Icons.location_searching_rounded,
+      title: 'Use your current location',
+      detail: _locationError ??
+          'SafeBiteAI uses GPS to find nearby stores and food hygiene ratings. Your exact address is not required.',
+      actionLabel: 'Allow location',
+      onAction: _useCurrentLocation,
+      isError: _locationError != null,
+    );
+  }
 
   Future<void> _useCurrentLocation() async {
-    setState(() => _locating = true);
+    setState(() {
+      _locating = true;
+      _locationError = null;
+    });
     try {
+      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!servicesEnabled) {
+        throw Exception('Turn on Location Services and try again.');
+      }
+
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        throw Exception('Location permission is not available.');
+        throw Exception(
+          'Location permission was not allowed. You can retry or continue after choosing your stores.',
+        );
       }
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
       );
-      final places =
-          await placemarkFromCoordinates(position.latitude, position.longitude);
-      final postcode = places.isEmpty ? '' : places.first.postalCode ?? '';
-      if (postcode.isEmpty) {
-        throw Exception('We could not detect your postcode.');
+
+      var postcode = '';
+      try {
+        final places = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        postcode = places.isEmpty ? '' : places.first.postalCode ?? '';
+      } catch (_) {
+        postcode = '';
       }
-      _postcodeController.text = postcode.toUpperCase();
-      setState(() {});
-    } catch (_) {
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Enter your postcode manually to continue.')),
-      );
+      setState(() {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+        _detectedPostcode = postcode.toUpperCase();
+      });
+      await _refreshNearbyStores();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _locationError = error.toString().replaceFirst('Exception: ', '');
+      });
     } finally {
       if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _changeStoreRadius(double radius) async {
+    setState(() => _storeRadiusMiles = radius);
+    await _refreshNearbyStores();
+  }
+
+  Future<void> _refreshNearbyStores() async {
+    final latitude = _latitude;
+    final longitude = _longitude;
+    if (latitude == null || longitude == null) return;
+
+    setState(() => _loadingStores = true);
+    try {
+      final candidates = await _hygieneService.nearbySupermarketCandidates(
+        latitude: latitude,
+        longitude: longitude,
+        radiusMiles: _storeRadiusMiles,
+      );
+      if (!mounted) return;
+      setState(() => _nearbyStores = NearbyStoreMatcher.match(candidates));
+    } catch (_) {
+      if (mounted) setState(() => _nearbyStores = const []);
+    } finally {
+      if (mounted) setState(() => _loadingStores = false);
     }
   }
 
   Future<void> _finish() async {
     setState(() => _saving = true);
     await widget.session.completeOnboarding(
-      postcode: _postcodeController.text,
+      postcode: _detectedPostcode,
+      latitude: _latitude,
+      longitude: _longitude,
+      storeRadiusMiles: _storeRadiusMiles,
       stores: _storesSelected,
       primaryMember: FamilyMember(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         name: _nameController.text.trim(),
         relationship: 'You',
         allergenIds: _allergensSelected,
+      ),
+      healthDataConsent: _allergensSelected.isNotEmpty && _healthDataConsent,
+    );
+  }
+
+  Future<void> _openPrivacyPolicy() {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const PrivacyPolicyScreen()),
+    );
+  }
+}
+
+class _LocationStatusCard extends StatelessWidget {
+  const _LocationStatusCard({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    this.loading = false,
+    this.actionLabel,
+    this.onAction,
+    this.isError = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final bool loading;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: isError ? AppColors.warningSoft : AppColors.greenSoft,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isError
+              ? AppColors.warning.withValues(alpha: 0.35)
+              : AppColors.green.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: isError ? Colors.white : AppColors.acidSoft,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: loading
+                ? const Padding(
+                    padding: EdgeInsets.all(13),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    icon,
+                    color: isError ? AppColors.warning : AppColors.green,
+                  ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 3),
+                Text(detail, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 8),
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
       ),
     );
   }
@@ -342,30 +602,29 @@ class _OnboardingHeader extends StatelessWidget {
         children: [
           const BrandMark(compact: true),
           const Spacer(),
-          if (step > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                gradient: AppGradients.primarySoft,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.line),
-              ),
-              child: Text(
-                '$step of 2',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.greenDark,
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              gradient: AppGradients.primarySoft,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.line),
             ),
+            child: Text(
+              '${step + 1} of 2',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.greenDark,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _WelcomeStep extends StatelessWidget {
-  const _WelcomeStep({required this.onContinue});
+class WelcomeStep extends StatelessWidget {
+  const WelcomeStep({super.key, required this.onContinue});
 
   final VoidCallback onContinue;
 
@@ -395,7 +654,7 @@ class _WelcomeStep extends StatelessWidget {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.greenDark.withOpacity(0.26),
+                        color: AppColors.greenDark.withValues(alpha: 0.26),
                         blurRadius: 36,
                         offset: const Offset(0, 16),
                       ),
@@ -410,9 +669,9 @@ class _WelcomeStep extends StatelessWidget {
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          AppColors.greenDark.withOpacity(0.98),
-                          AppColors.greenDark.withOpacity(0.78),
-                          AppColors.greenDark.withOpacity(0.08),
+                          AppColors.greenDark.withValues(alpha: 0.98),
+                          AppColors.greenDark.withValues(alpha: 0.78),
+                          AppColors.greenDark.withValues(alpha: 0.08),
                         ],
                       ),
                     ),
@@ -452,7 +711,7 @@ class _WelcomeStep extends StatelessWidget {
                                   .textTheme
                                   .bodyLarge
                                   ?.copyWith(
-                                    color: Colors.white.withOpacity(0.8),
+                                    color: Colors.white.withValues(alpha: 0.8),
                                     fontWeight: FontWeight.w600,
                                   ),
                             ),
@@ -463,7 +722,7 @@ class _WelcomeStep extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 30),
-                Text('How SafeBite works',
+                Text('How SafeBiteAI works',
                     style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 6),
                 Text(
@@ -471,7 +730,7 @@ class _WelcomeStep extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 14),
-                const _HowItWorksCard(
+                const HowItWorksCard(
                   number: '1',
                   icon: Icons.people_alt_rounded,
                   title: 'Add your household',
@@ -482,7 +741,7 @@ class _WelcomeStep extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                const _HowItWorksCard(
+                const HowItWorksCard(
                   number: '2',
                   icon: Icons.qr_code_scanner_rounded,
                   title: 'Scan before you buy',
@@ -493,7 +752,7 @@ class _WelcomeStep extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                const _HowItWorksCard(
+                const HowItWorksCard(
                   number: '3',
                   icon: Icons.notifications_active_rounded,
                   title: 'Stay recall-aware',
@@ -524,8 +783,9 @@ class _WelcomeStep extends StatelessWidget {
   }
 }
 
-class _HowItWorksCard extends StatelessWidget {
-  const _HowItWorksCard({
+class HowItWorksCard extends StatelessWidget {
+  const HowItWorksCard({
+    super.key,
     required this.number,
     required this.icon,
     required this.title,
@@ -573,7 +833,7 @@ class _HowItWorksCard extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.72),
+                        color: Colors.white.withValues(alpha: 0.72),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
