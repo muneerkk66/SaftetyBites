@@ -6,6 +6,7 @@ import '../../core/app_session.dart';
 import '../../core/app_theme.dart';
 import '../../core/auth_controller.dart';
 import '../alerts/alerts_screen.dart';
+import '../assistant/food_assistant_screen.dart';
 import '../family/family_screen.dart';
 import '../hygiene/hygiene_screen.dart';
 import '../scan/barcode_scanner_screen.dart';
@@ -72,11 +73,16 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           session: widget.session,
           auth: widget.auth,
           onScan: _openScanner,
-          onOpenHygiene: () => _selectTab(1),
-          onOpenFamily: () => _selectTab(3),
-          onOpenAlerts: () => _selectTab(2),
+          onOpenAssistant: () => _selectTab(2),
+          onOpenFamily: () => _selectTab(4),
+          onOpenAlerts: () => _selectTab(3),
         ),
         HygieneScreen(session: widget.session),
+        FoodAssistantScreen(
+          session: widget.session,
+          auth: widget.auth,
+          onOpenFamily: () => _selectTab(4),
+        ),
         AlertsScreen(session: widget.session),
         FamilyScreen(session: widget.session, auth: widget.auth),
       ],
@@ -118,6 +124,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           selectedIcon:
               Icon(Icons.restaurant_rounded, color: AppColors.greenDark),
           label: 'Hygiene',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.auto_awesome_outlined),
+          selectedIcon:
+              Icon(Icons.auto_awesome_rounded, color: AppColors.greenDark),
+          label: 'Ask AI',
         ),
         NavigationDestination(
           icon: alertsIcon,
@@ -172,6 +184,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                         selectedIcon: Icon(Icons.restaurant_rounded,
                             color: AppColors.greenDark),
                         label: Text('Hygiene'),
+                      ),
+                      const NavigationRailDestination(
+                        icon: Icon(Icons.auto_awesome_outlined),
+                        selectedIcon: Icon(Icons.auto_awesome_rounded,
+                            color: AppColors.greenDark),
+                        label: Text('Ask AI'),
                       ),
                       NavigationRailDestination(
                         icon: alertsIcon,
@@ -233,7 +251,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   void _openAlertsFromNotification() {
-    _selectTab(2);
+    _selectTab(3);
   }
 
   void _selectTab(int value) {

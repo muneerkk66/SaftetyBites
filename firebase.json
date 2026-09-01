@@ -23,6 +23,9 @@
   ],
   "hosting": {
     "public": "build/web",
+    "predeploy": [
+      "bash scripts/stage_offline_catalog.sh"
+    ],
     "cleanUrls": true,
     "ignore": [
       "firebase.json",

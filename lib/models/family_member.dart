@@ -1,3 +1,5 @@
+import 'allergen.dart';
+
 class FamilyMember {
   const FamilyMember({
     required this.id,
@@ -41,7 +43,9 @@ class FamilyMember {
       id: json['id'] as String,
       name: json['name'] as String,
       relationship: json['relationship'] as String,
-      allergenIds: Set<String>.from(json['allergenIds'] as List<dynamic>),
+      allergenIds: Allergens.expandLegacyIds(
+        (json['allergenIds'] as List<dynamic>).map((value) => value.toString()),
+      ),
       avatarIndex: json['avatarIndex'] as int? ?? 0,
     );
   }

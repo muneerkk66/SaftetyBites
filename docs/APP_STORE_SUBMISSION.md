@@ -2,24 +2,18 @@
 
 ## Release Recommendation
 
-Do not upload the existing build `1.0.0 (2)`. Its archive and IPA were created
-before the latest recall-notification, branding and iPhone-only changes. Finish
-the blockers below, then create a clean release using build number `3` or later.
+Build `1.0.0 (5)` was uploaded to TestFlight before the expanded searchable
+allergen selector. Complete release QA, then use build `7` or later for App Review.
 
 ## Release Blockers
 
-1. Add in-app Firebase account deletion. Apple requires apps that support
-   account creation to let users initiate deletion inside the app. SafeBiteAI
-   currently supports Google and Apple account creation but only provides sign
-   out.
-2. Publish and verify these public pages without redirects or 404 responses:
+1. Publish and verify these public pages without redirects or 404 responses:
    - `https://safebiteai.co.uk/privacy`
    - `https://safebiteai.co.uk/support`
-3. Point `safebiteai.co.uk` at the deployed Firebase Hosting site and add the
-   domain to Firebase Authentication's authorised domains.
-4. Confirm rights and attribution requirements for Open Food Facts, FatSecret,
+2. Confirm rights and attribution requirements for Open Food Facts, FatSecret,
    Food Standards Agency data and Google Places photos.
-5. Complete a fresh iPhone release QA pass and build `1.0.0 (3)` or later.
+3. Complete a fresh iPhone release QA pass, including account deletion and the
+   searchable allergen selector, using build `1.0.0 (7)` or later.
 
 ## App Record
 
@@ -30,7 +24,7 @@ the blockers below, then create a clean release using build number `3` or later.
 | SKU | `SAFEBITEAI-IOS-001` |
 | Primary language | English (UK) |
 | Version | `1.0.0` |
-| Next build | `3` or later |
+| Next build | `7` or later |
 | Platform | iPhone only |
 | Minimum iOS | iOS 15.5 |
 | Primary category | Food & Drink |
@@ -82,6 +76,8 @@ KEY FEATURES
 • Check listed allergens and “may contain” warnings
 
 • Create profiles for you, your partner and family members
+
+• Search all 14 UK regulated allergens and add other sensitivities
 
 • Read ingredient labels using on-device text recognition
 
@@ -137,7 +133,8 @@ Support: support@safebiteai.co.uk
 9. Receive a recall push and verify the app-icon badge, Alerts-tab badge and
    unread styling; open the alert and verify the indicators reset.
 10. Disable internet access and re-check a previously downloaded product.
-11. Sign out and, once implemented, delete the Firebase account in the app.
+11. Delete the Firebase account in the Family tab and verify the introduction
+    restarts with local household data cleared.
 
 ### Feedback Email
 
@@ -184,6 +181,8 @@ current implementation, declare at least:
 | User ID | Yes | No | App functionality and authentication |
 | Device ID | No | No | App functionality and recall delivery |
 | Precise location | No | No | App functionality |
+| Photos or videos | Yes | No | Optional AI food assistant functionality |
+| Other user content | Yes | No | Optional AI food assistant questions |
 
 Also disclose data collected by every third-party SDK included in the submitted
 binary. SafeBiteAI does not currently use advertising, cross-app tracking,
@@ -203,7 +202,9 @@ history and location are not uploaded for recall matching.
 - EU Digital Services Act: NECSCA LTD should declare trader status if the app is
   distributed in the EU and provide the required verified contact information.
 - Sign in with Apple: enabled because Google sign-in is offered.
-- Account deletion: must be available inside the app before review.
+- Account deletion: available in Family > Account connected, with provider
+  reauthentication, Sign in with Apple token revocation, Firebase account
+  deletion, recall-registration removal and local-data clearing.
 
 ## Screenshot Plan
 
@@ -227,7 +228,7 @@ Do not place unverified safety claims such as “100% safe” in screenshots.
 - Verify portrait-only orientation.
 - Verify the SafeBiteAI name, new logo, launch image and app icon.
 - Verify Google and Apple sign-in plus sign out.
-- Verify in-app account deletion after implementation.
+- Verify in-app account deletion for both Google and Apple accounts.
 - Deny and later enable camera, photos, location and notification permissions.
 - Test valid, missing, non-food and ingredient-incomplete barcodes.
 - Confirm scanner loading stops after every result or error.
@@ -246,7 +247,7 @@ Do not place unverified safety claims such as “100% safe” in screenshots.
 ## Build and Upload
 
 1. Confirm App Store distribution signing in Xcode for team `Y89LU2A58Y`.
-2. Increment the build number in `pubspec.yaml` to at least `1.0.0+3`.
+2. Increment the build number in `pubspec.yaml` to at least `1.0.0+7`.
 3. From the project root, run:
 
    ```bash
@@ -257,7 +258,7 @@ Do not place unverified safety claims such as “100% safe” in screenshots.
    flutter analyze
    env -u GEM_HOME -u GEM_PATH flutter build ipa --release \
      --build-name 1.0.0 \
-     --build-number 3 \
+     --build-number 7 \
      --export-options-plist=ios/ExportOptions.plist
    ```
 

@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 import '../models/offline_catalog.dart';
 import '../models/product.dart';
 import 'product_local_store.dart';
+import 'product_name_matcher.dart';
 
 ProductLocalStore createProductLocalStore() => _SqliteProductLocalStore();
 
@@ -20,7 +21,7 @@ class _SqliteProductLocalStore implements ProductLocalStore {
     if (existing != null) return existing;
     final database = await openDatabase(
       path.join(await getDatabasesPath(), 'safebite_products.db'),
-      version: 2,
+      version: 3,
       onCreate: (database, _) => _ensureSchema(database),
       onUpgrade: (database, _, __) => _ensureSchema(database),
       onOpen: _ensureSchema,
@@ -43,6 +44,7 @@ class _SqliteProductLocalStore implements ProductLocalStore {
         completeness REAL NOT NULL,
         popularity REAL NOT NULL,
         allergen_data_complete INTEGER NOT NULL,
+        category_id TEXT,
         catalog_version TEXT,
         updated_at INTEGER NOT NULL
       )
@@ -54,16 +56,33 @@ class _SqliteProductLocalStore implements ProductLocalStore {
         'ALTER TABLE products ADD COLUMN catalog_version TEXT',
       );
     }
-    await database.execute('''
-      CREATE TABLE IF NOT EXISTS product_categories (
-        barcode TEXT NOT NULL,
-        category_id TEXT NOT NULL,
-        PRIMARY KEY (barcode, category_id)
-      )
+    if (!productColumns.any((column) => column['name'] == 'category_id')) {
+      await database.execute(
+        'ALTER TABLE products ADD COLUMN category_id TEXT',
+      );
+    }
+    final legacyCategoryTable = await database.rawQuery('''
+      SELECT name FROM sqlite_master
+      WHERE type = 'table' AND name = 'product_categories'
     ''');
+    if (legacyCategoryTable.isNotEmpty) {
+      await database.execute('''
+        UPDATE products
+        SET category_id = (
+          SELECT category_id
+          FROM product_categories
+          WHERE product_categories.barcode = products.barcode
+          ORDER BY rowid DESC
+          LIMIT 1
+        )
+        WHERE category_id IS NULL
+      ''');
+      await database.execute('DROP INDEX IF EXISTS category_lookup');
+      await database.execute('DROP TABLE product_categories');
+    }
     await database.execute('''
       CREATE INDEX IF NOT EXISTS category_lookup
-      ON product_categories(category_id, barcode)
+      ON products(category_id, popularity)
     ''');
     await database.execute('''
       CREATE TABLE IF NOT EXISTS metadata (
@@ -83,10 +102,27 @@ class _SqliteProductLocalStore implements ProductLocalStore {
       limit: 1,
     );
     if (rows.isEmpty) return null;
-    return _productFromRow(
-      rows.first,
-      await _categoriesFor(database, [barcode]),
+    return _productFromRow(rows.first);
+  }
+
+  @override
+  Future<List<ProductInfo>> searchByName(
+    String name, {
+    String brand = '',
+    int limit = 40,
+  }) async {
+    final terms = productNameTerms(name)
+      ..sort((first, second) => second.length.compareTo(first.length));
+    if (terms.isEmpty) return const [];
+    final database = await _db;
+    final rows = await database.query(
+      'products',
+      where: 'LOWER(name) LIKE ?',
+      whereArgs: ['%${terms.first}%'],
+      orderBy: 'popularity DESC',
+      limit: limit.clamp(10, 80),
     );
+    return rows.map(_productFromRow).toList();
   }
 
   @override
@@ -98,17 +134,13 @@ class _SqliteProductLocalStore implements ProductLocalStore {
     final database = await _db;
     final placeholders = List.filled(categoryIds.length, '?').join(',');
     final rows = await database.rawQuery('''
-      SELECT p.*, COUNT(c.category_id) AS category_matches
+      SELECT p.*
       FROM products p
-      JOIN product_categories c ON c.barcode = p.barcode
-      WHERE c.category_id IN ($placeholders)
-      GROUP BY p.barcode
-      ORDER BY category_matches DESC, p.popularity DESC
+      WHERE p.category_id IN ($placeholders)
+      ORDER BY p.popularity DESC, p.completeness DESC
       LIMIT ?
     ''', [...categoryIds, limit]);
-    final barcodes = rows.map((row) => row['barcode']! as String).toList();
-    final categories = await _categoriesFor(database, barcodes);
-    return rows.map((row) => _productFromRow(row, categories)).toList();
+    return rows.map(_productFromRow).toList();
   }
 
   @override
@@ -142,18 +174,6 @@ class _SqliteProductLocalStore implements ProductLocalStore {
           _rowFromProduct(product, now, catalogVersion: catalogVersion),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
-        batch.delete(
-          'product_categories',
-          where: 'barcode = ?',
-          whereArgs: [product.barcode],
-        );
-        for (final category in product.categoryIds) {
-          batch.insert(
-            'product_categories',
-            {'barcode': product.barcode, 'category_id': category},
-            conflictAlgorithm: ConflictAlgorithm.ignore,
-          );
-        }
       }
       await batch.commit(noResult: true);
     });
@@ -185,13 +205,6 @@ class _SqliteProductLocalStore implements ProductLocalStore {
     required DateTime updatedAt,
   }) async {
     final database = await _db;
-    await database.rawDelete('''
-      DELETE FROM product_categories
-      WHERE barcode IN (
-        SELECT barcode FROM products
-        WHERE catalog_version IS NOT NULL AND catalog_version != ?
-      )
-    ''', [version]);
     await database.delete(
       'products',
       where: 'catalog_version IS NOT NULL AND catalog_version != ?',
@@ -212,6 +225,8 @@ class _SqliteProductLocalStore implements ProductLocalStore {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     await batch.commit(noResult: true);
+    await database.execute('VACUUM');
+    await database.execute('PRAGMA optimize');
   }
 
   Map<String, Object?> _rowFromProduct(
@@ -231,13 +246,14 @@ class _SqliteProductLocalStore implements ProductLocalStore {
         'completeness': product.completeness,
         'popularity': product.popularity,
         'allergen_data_complete': product.allergenDataComplete ? 1 : 0,
+        'category_id':
+            product.categoryIds.isEmpty ? null : product.categoryIds.last,
         'catalog_version': catalogVersion,
         'updated_at': updatedAt,
       };
 
   ProductInfo _productFromRow(
     Map<String, Object?> row,
-    Map<String, Set<String>> categories,
   ) {
     Set<String> decodeSet(Object? value) =>
         (jsonDecode(value?.toString() ?? '[]') as List<dynamic>)
@@ -254,30 +270,12 @@ class _SqliteProductLocalStore implements ProductLocalStore {
       traceAllergenIds: decodeSet(row['trace_allergen_ids']),
       imageUrl: row['image_url'] as String?,
       dataSource: row['data_source']! as String,
-      categoryIds: categories[barcode] ?? const {},
+      categoryIds: row['category_id'] == null
+          ? const {}
+          : {row['category_id']! as String},
       completeness: (row['completeness']! as num).toDouble(),
       popularity: (row['popularity']! as num).toDouble(),
       allergenDataComplete: row['allergen_data_complete'] == 1,
     );
-  }
-
-  Future<Map<String, Set<String>>> _categoriesFor(
-    Database database,
-    List<String> barcodes,
-  ) async {
-    if (barcodes.isEmpty) return {};
-    final placeholders = List.filled(barcodes.length, '?').join(',');
-    final rows = await database.rawQuery(
-      'SELECT barcode, category_id FROM product_categories '
-      'WHERE barcode IN ($placeholders)',
-      barcodes,
-    );
-    final result = <String, Set<String>>{};
-    for (final row in rows) {
-      result
-          .putIfAbsent(row['barcode']! as String, () => <String>{})
-          .add(row['category_id']! as String);
-    }
-    return result;
   }
 }

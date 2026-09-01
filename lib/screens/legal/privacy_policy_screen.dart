@@ -74,12 +74,17 @@ class PrivacyPolicyScreen extends StatelessWidget {
             const _PolicySection(
               title: 'Barcode and label checks',
               body:
-                  'SafeBiteAI checks its on-device catalogue first. If a product is not available locally, the barcode is sent to Open Food Facts. Open Food Facts results may be stored on your device for later offline use. If Open Food Facts has no result, signed-in users may request a live FatSecret lookup through Firebase. FatSecret product details are not added to SafeBiteAI’s database or local catalogue. If no provider has a result, SafeBiteAI records the barcode, scan count and review status in Firebase for manual product research; it does not attach household or allergy information. Ingredient-label photographs are processed on your device and are not uploaded by SafeBiteAI.',
+                  'SafeBiteAI checks its on-device catalogue first. If a product is not available locally, the barcode is sent to Open Food Facts. Open Food Facts results may be stored on your device for later offline use. If Open Food Facts has no result, signed-in users may request a live FatSecret lookup through Firebase. FatSecret product details are not added to SafeBiteAI’s database or local catalogue. If no provider has a result, SafeBiteAI records the barcode, scan count and review status in Firebase for manual product research; it does not attach household or allergy information. Photographs used by the standard ingredient-label scanner are processed on your device. A photograph is uploaded only when you explicitly choose the AI food assistant.',
             ),
             const _PolicySection(
               title: 'AI alternative ranking',
               body:
                   'Your device first removes alternatives with household allergen or trace conflicts. If you request AI ranking while signed in, only product details from that filtered shortlist are sent through an authenticated Firebase Cloud Function to the OpenAI API. Family names, allergy choices and location are not sent to OpenAI. The request uses store=false. OpenAI may retain API abuse-monitoring logs for up to 30 days under its applicable controls.',
+            ),
+            const _PolicySection(
+              title: 'AI food assistant',
+              body:
+                  'When a signed-in user chooses the AI food assistant, the selected product photograph, their typed food question and a short product-only conversation are sent through an authenticated Firebase Cloud Function to the OpenAI API. SafeBiteAI does not send household names, allergy choices or location to OpenAI. Images are used to identify visible packaging and extract visible label evidence; they are not stored in a SafeBiteAI database. Requests use store=false. OpenAI may retain API abuse-monitoring logs for up to 30 days under its applicable controls. You can use barcode and on-device label checks without using this feature.',
             ),
             const _PolicySection(
               title: 'Why we use information',
@@ -89,7 +94,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             const _PolicySection(
               title: 'Service providers and data sources',
               body:
-                  'Firebase Authentication, Cloud Functions, Cloud Firestore, Cloud Messaging and the missing-barcode review queue are provided by Google. Apple provides Sign in with Apple and APNs notification delivery when you choose those options. Product data and images come from Open Food Facts, with FatSecret used as a live fallback where configured. Hygiene ratings and food alerts come from the UK Food Standards Agency. Google Places supplies food-business photos. Postcode coordinates come from Postcodes.io. AI ranking is provided by OpenAI. These providers may receive network information such as your IP address and apply their own security, retention and international-transfer arrangements.',
+                  'Firebase Authentication, Cloud Functions, Cloud Firestore, Cloud Messaging and the missing-barcode review queue are provided by Google. Apple provides Sign in with Apple and APNs notification delivery when you choose those options. Product data and images come from Open Food Facts, with FatSecret used as a live fallback where configured. Hygiene ratings and food alerts come from the UK Food Standards Agency. Google Places supplies food-business photos. Postcode coordinates come from Postcodes.io. AI ranking is provided by OpenAI. These providers may receive network information such as your IP address and apply their own security, retention and international-transfer arrangements. Where a provider processes personal data for SafeBiteAI, we require protection consistent with this policy and applicable data-protection law and use limited to the agreed service.',
             ),
             const _PolicySection(
               title: 'International transfers',
@@ -99,12 +104,17 @@ class PrivacyPolicyScreen extends StatelessWidget {
             const _PolicySection(
               title: 'Automated processing',
               body:
-                  'SafeBiteAI uses rules to flag possible allergen conflicts and may use AI to rank product alternatives. These results are informational suggestions only. They do not make decisions that produce legal or similarly significant effects, and you remain in control of every purchase and safety decision.',
+                  'SafeBiteAI uses rules to flag possible allergen conflicts and may use AI to interpret visible product images, answer product questions and rank alternatives. AI image analysis can be incomplete or incorrect and never guarantees that a food is safe. These results are informational suggestions only. They do not make decisions that produce legal or similarly significant effects, and you remain in control of every purchase and safety decision.',
             ),
             const _PolicySection(
               title: 'Retention',
               body:
-                  'Local information remains until you delete profiles, reset the app, clear browser storage or uninstall. SafeBiteAI retains missing barcodes until they are researched, resolved or no longer needed for catalogue improvement. Live FatSecret product responses are not retained by SafeBiteAI. Recall installation records are updated while notifications remain enabled and invalid tokens are deleted when detected. Firebase account information remains while your account is active and for a limited period where needed for security, legal obligations or dispute handling. Contact us to request account deletion.',
+                  'Local information remains until you delete profiles, delete your account, reset the app, clear browser storage or uninstall. SafeBiteAI retains missing barcodes until they are researched, resolved or no longer needed for catalogue improvement. Live FatSecret product responses are not retained by SafeBiteAI. Recall installation records are updated while notifications remain enabled and invalid tokens are deleted when detected. Firebase account information remains while your account is active and for a limited period where needed for security, legal obligations or dispute handling.',
+            ),
+            const _PolicySection(
+              title: 'Account deletion',
+              body:
+                  'Signed-in users can permanently delete their SafeBiteAI account from Family > Account connected > Delete account and app data. This deletes the Firebase Authentication account, removes this device’s recall registration and clears household profiles, allergy choices, location and preferences stored by the app on this device. It does not delete your Google account or Apple ID. You may also contact support@safebiteai.co.uk for assistance.',
             ),
             const _PolicySection(
               title: 'Your rights',
@@ -127,7 +137,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   'We will update this policy when SafeBiteAI’s features or data practices change and will show the new effective date. Material changes will be brought to users’ attention before the new processing begins.',
             ),
             const SizedBox(height: 12),
-            Text('Effective: 29 August 2026',
+            Text('Effective: 31 August 2026',
                 style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 4),
             const SelectableText(

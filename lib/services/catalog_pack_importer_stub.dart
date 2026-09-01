@@ -7,6 +7,20 @@ CatalogPackImporter createCatalogPackImporter() =>
 
 class _UnsupportedCatalogPackImporter implements CatalogPackImporter {
   @override
+  Future<OfflineCatalogManifest?> bundledManifest() async => null;
+
+  @override
+  Future<int> importBundled(
+    OfflineCatalogManifest manifest, {
+    required Future<void> Function(List<ProductInfo> products) onBatch,
+    void Function(int imported, int expected)? onProgress,
+  }) {
+    throw UnsupportedError(
+      'The bundled catalogue is available in the iOS and Android apps.',
+    );
+  }
+
+  @override
   Future<int> import(
     OfflineCatalogManifest manifest, {
     required Future<void> Function(List<ProductInfo> products) onBatch,

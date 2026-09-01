@@ -13,6 +13,7 @@ void main() {
         productCount: 0,
         supportsFullCatalog: true,
       ),
+      bootstrapCatalog: () async => 0,
       syncCatalog: () async {
         syncCalls++;
         return 20;
@@ -26,7 +27,7 @@ void main() {
 
   test('does not sync again inside the minimum interval', () async {
     SharedPreferences.setMockInitialValues({
-      'offline_catalog_last_sync_attempt_v1':
+      'offline_catalog_last_sync_success_v1':
           DateTime.utc(2026, 8, 26, 9).toIso8601String(),
     });
     var syncCalls = 0;
@@ -35,6 +36,7 @@ void main() {
         productCount: 10,
         supportsFullCatalog: true,
       ),
+      bootstrapCatalog: () async => 0,
       syncCatalog: () async {
         syncCalls++;
         return 0;
@@ -46,6 +48,27 @@ void main() {
     expect(syncCalls, 0);
   });
 
+  test('retries after a failed catalogue sync', () async {
+    var syncCalls = 0;
+    final service = SilentCatalogSyncService(
+      loadStats: () async => const OfflineCatalogStats(
+        productCount: 0,
+        supportsFullCatalog: true,
+      ),
+      bootstrapCatalog: () async => 0,
+      syncCatalog: () async {
+        syncCalls++;
+        if (syncCalls == 1) throw Exception('temporary failure');
+        return 20;
+      },
+      now: () => DateTime.utc(2026, 8, 26, 10),
+    );
+
+    expect(await service.syncIfDue(), isFalse);
+    expect(await service.syncIfDue(), isTrue);
+    expect(syncCalls, 2);
+  });
+
   test('does not download a full catalogue on web', () async {
     var syncCalls = 0;
     final service = SilentCatalogSyncService(
@@ -53,6 +76,7 @@ void main() {
         productCount: 3,
         supportsFullCatalog: false,
       ),
+      bootstrapCatalog: () async => 0,
       syncCatalog: () async {
         syncCalls++;
         return 0;

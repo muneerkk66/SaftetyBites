@@ -62,7 +62,6 @@ abstract final class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.canvas,
-      fontFamily: 'SF Pro Display',
       textTheme: const TextTheme(
         displaySmall: TextStyle(
           color: AppColors.ink,

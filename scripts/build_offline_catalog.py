@@ -4,20 +4,43 @@ import csv
 import gzip
 import hashlib
 import json
+import sys
 from pathlib import Path
 from urllib.request import Request, urlopen
 
 
+csv.field_size_limit(sys.maxsize)
+
+
 ALLERGEN_MAP = {
     "peanuts": "peanuts",
+    "peanut": "peanuts",
     "nuts": "tree_nuts",
+    "almonds": "tree_nuts",
+    "hazelnuts": "tree_nuts",
+    "walnuts": "tree_nuts",
+    "cashew-nuts": "tree_nuts",
+    "pecan-nuts": "tree_nuts",
+    "pistachio-nuts": "tree_nuts",
+    "macadamia-nuts": "tree_nuts",
+    "brazil-nuts": "tree_nuts",
     "milk": "milk",
+    "egg": "eggs",
     "eggs": "eggs",
     "gluten": "gluten",
+    "wheat": "gluten",
+    "barley": "gluten",
+    "rye": "gluten",
+    "oats": "gluten",
+    "spelt": "gluten",
+    "soya": "soya",
     "soybeans": "soya",
+    "sesame": "sesame",
     "sesame-seeds": "sesame",
     "fish": "fish",
+    "crustacean": "shellfish",
     "crustaceans": "shellfish",
+    "mollusc": "shellfish",
     "molluscs": "shellfish",
     "mustard": "mustard",
     "celery": "celery",
@@ -69,21 +92,42 @@ def numeric(value):
         return 0
 
 
+def primary_category(row):
+    main_category = (row.get("main_category") or "").strip()
+    if main_category:
+        return main_category
+    categories = tags(row.get("categories_tags"))
+    return categories[-1] if categories else None
+
+
 def product(row):
-    return {
+    ingredients = (
+        row.get("ingredients_text_en") or row.get("ingredients_text") or ""
+    ).strip()
+    allergens = allergen_ids(row.get("allergens_tags") or row.get("allergens"))
+    traces = allergen_ids(row.get("traces_tags") or row.get("traces"))
+    category = primary_category(row)
+    image_url = (
+        row.get("image_front_small_url")
+        or row.get("image_small_url")
+        or row.get("image_url")
+        or ""
+    ).strip()
+    item = {
         "barcode": (row.get("code") or "").strip(),
         "name": (row.get("product_name_en") or row.get("product_name") or "Unknown product").strip(),
         "brand": (row.get("brands") or "Brand not listed").strip(),
-        "ingredients": (row.get("ingredients_text_en") or row.get("ingredients_text") or "").strip(),
-        "allergenIds": allergen_ids(row.get("allergens_tags")),
-        "traceAllergenIds": allergen_ids(row.get("traces_tags")),
-        "imageUrl": (row.get("image_front_small_url") or "").strip() or None,
-        "dataSource": "Open Food Facts",
-        "categoryIds": tags(row.get("categories_tags")),
+        "ingredients": ingredients,
+        "allergenIds": allergens,
+        "traceAllergenIds": traces,
         "completeness": numeric(row.get("completeness")),
         "popularity": numeric(row.get("popularity_key")),
-        "allergenDataComplete": True,
     }
+    if image_url:
+        item["imageUrl"] = image_url
+    if category:
+        item["categoryIds"] = [category]
+    return item
 
 
 def main():
@@ -104,6 +148,12 @@ def main():
                     continue
                 item = product(row)
                 if len(item["barcode"]) < 8:
+                    continue
+                if not (
+                    item["ingredients"]
+                    or item["allergenIds"]
+                    or item["traceAllergenIds"]
+                ):
                     continue
                 output.write(json.dumps(item, separators=(",", ":"), ensure_ascii=False))
                 output.write("\n")

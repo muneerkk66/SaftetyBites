@@ -8,6 +8,12 @@ abstract interface class ProductLocalStore {
 
   Future<ProductInfo?> findByBarcode(String barcode);
 
+  Future<List<ProductInfo>> searchByName(
+    String name, {
+    String brand = '',
+    int limit = 40,
+  });
+
   Future<List<ProductInfo>> searchByCategories(
     Set<String> categoryIds, {
     int limit = 50,

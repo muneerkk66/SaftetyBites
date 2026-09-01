@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/offline_catalog.dart';
 import '../models/product.dart';
 import 'product_local_store.dart';
+import 'product_name_matcher.dart';
 
 ProductLocalStore createProductLocalStore() => _BrowserProductLocalStore();
 
@@ -22,6 +23,29 @@ class _BrowserProductLocalStore implements ProductLocalStore {
     final products = await _read();
     final json = products[barcode];
     return json == null ? null : ProductInfo.fromJson(json);
+  }
+
+  @override
+  Future<List<ProductInfo>> searchByName(
+    String name, {
+    String brand = '',
+    int limit = 40,
+  }) async {
+    final products = (await _read()).values.map(ProductInfo.fromJson).toList()
+      ..sort(
+        (first, second) => productNameMatchScore(
+          name: name,
+          brand: brand,
+          candidate: second,
+        ).compareTo(
+          productNameMatchScore(
+            name: name,
+            brand: brand,
+            candidate: first,
+          ),
+        ),
+      );
+    return products.take(limit).toList();
   }
 
   @override

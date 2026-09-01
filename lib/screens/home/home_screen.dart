@@ -15,7 +15,7 @@ class HomeScreen extends StatelessWidget {
     required this.session,
     required this.auth,
     required this.onScan,
-    required this.onOpenHygiene,
+    required this.onOpenAssistant,
     required this.onOpenFamily,
     required this.onOpenAlerts,
   });
@@ -23,7 +23,7 @@ class HomeScreen extends StatelessWidget {
   final AppSession session;
   final AuthController auth;
   final VoidCallback onScan;
-  final VoidCallback onOpenHygiene;
+  final VoidCallback onOpenAssistant;
   final VoidCallback onOpenFamily;
   final VoidCallback onOpenAlerts;
 
@@ -44,7 +44,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 22),
                     _ScanHero(onScan: onScan),
                     const SizedBox(height: 18),
-                    _HygieneCard(onTap: onOpenHygiene),
+                    _AiAssistantCard(onTap: onOpenAssistant),
                     const SizedBox(height: 28),
                     SectionHeading(
                       title: 'Protected household',
@@ -264,8 +264,8 @@ class _ProfileAvatar extends StatelessWidget {
   }
 }
 
-class _HygieneCard extends StatelessWidget {
-  const _HygieneCard({required this.onTap});
+class _AiAssistantCard extends StatelessWidget {
+  const _AiAssistantCard({required this.onTap});
 
   final VoidCallback onTap;
 
@@ -281,7 +281,7 @@ class _HygieneCard extends StatelessWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFE8FBD9), Color(0xFFD8F2DF)],
+              colors: [Color(0xFFF0FFD9), Color(0xFFDFF3E1)],
             ),
             borderRadius: BorderRadius.circular(24),
           ),
@@ -291,11 +291,11 @@ class _HygieneCard extends StatelessWidget {
                 width: 58,
                 height: 58,
                 decoration: BoxDecoration(
-                  color: AppColors.greenDark,
+                  gradient: AppGradients.primary,
                   borderRadius: BorderRadius.circular(19),
                 ),
                 child: const Icon(
-                  Icons.restaurant_rounded,
+                  Icons.auto_awesome_rounded,
                   color: AppColors.acid,
                   size: 29,
                 ),
@@ -305,11 +305,11 @@ class _HygieneCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Check food hygiene',
+                    Text('Ask SafeBiteAI',
                         style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 4),
                     Text(
-                      'Find official ratings nearby or search any UK restaurant.',
+                      'Photograph a product or label and ask what can be verified.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -340,7 +340,7 @@ class _ScanHero extends StatelessWidget {
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-              color: AppColors.greenDark.withOpacity(0.24),
+              color: AppColors.greenDark.withValues(alpha: 0.24),
               blurRadius: 30,
               offset: const Offset(0, 15),
             ),
@@ -364,9 +364,9 @@ class _ScanHero extends StatelessWidget {
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                   colors: [
-                    AppColors.greenDark.withOpacity(0.98),
-                    AppColors.greenDark.withOpacity(0.78),
-                    AppColors.greenDark.withOpacity(0.12),
+                    AppColors.greenDark.withValues(alpha: 0.98),
+                    AppColors.greenDark.withValues(alpha: 0.78),
+                    AppColors.greenDark.withValues(alpha: 0.12),
                   ],
                   stops: const [0, 0.52, 1],
                 ),

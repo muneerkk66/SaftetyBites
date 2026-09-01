@@ -12,8 +12,7 @@ const supportedRetailers = new Set([
 ]);
 
 export function normalizeInstallation(data) {
-  const installationId = typeof data?.installationId === "string" ?
-    data.installationId.trim().toLowerCase() : "";
+  const installationId = normalizeInstallationId(data);
   const token = typeof data?.token === "string" ? data.token.trim() : "";
   const platform = data?.platform === "ios" || data?.platform === "android" ?
     data.platform : "unknown";
@@ -22,13 +21,19 @@ export function normalizeInstallation(data) {
       .map((value) => value.trim().toLowerCase())
       .filter((value) => supportedRetailers.has(value)) : [])].sort();
 
-  if (!/^[a-f0-9]{32}$/.test(installationId)) {
-    throw new Error("A valid installation identifier is required.");
-  }
   if (token.length < 20 || token.length > 4096) {
     throw new Error("A valid Firebase messaging token is required.");
   }
   return {installationId, token, platform, retailerIds};
+}
+
+export function normalizeInstallationId(data) {
+  const installationId = typeof data?.installationId === "string" ?
+    data.installationId.trim().toLowerCase() : "";
+  if (!/^[a-f0-9]{32}$/.test(installationId)) {
+    throw new Error("A valid installation identifier is required.");
+  }
+  return installationId;
 }
 
 export function buildRecallMessage(tokens, alert) {

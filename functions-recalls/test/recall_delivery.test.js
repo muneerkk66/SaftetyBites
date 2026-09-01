@@ -6,6 +6,7 @@ import {
   chunks,
   isInvalidMessagingToken,
   normalizeInstallation,
+  normalizeInstallationId,
 } from "../recall_delivery.js";
 
 test("normalizes a recall installation registration", () => {
@@ -35,6 +36,16 @@ test("rejects invalid installation registrations", () => {
     token: "short",
     retailerIds: ["tesco"],
   }));
+});
+
+test("normalizes an installation identifier for deletion", () => {
+  assert.equal(
+    normalizeInstallationId({
+      installationId: "ABCDEF0123456789ABCDEF0123456789",
+    }),
+    "abcdef0123456789abcdef0123456789",
+  );
+  assert.throws(() => normalizeInstallationId({installationId: "invalid"}));
 });
 
 test("builds a direct recall notification with unread metadata", () => {

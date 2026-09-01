@@ -9,6 +9,7 @@ import '../../models/offline_catalog.dart';
 import '../../services/food_hygiene_service.dart';
 import '../../services/nearby_store_matcher.dart';
 import '../../services/product_repository.dart';
+import '../../services/recall_notification_service.dart';
 import '../auth/account_access_screen.dart';
 import '../legal/privacy_policy_screen.dart';
 import '../../widgets/allergen_selector.dart';
@@ -95,7 +96,7 @@ class FamilyScreen extends StatelessWidget {
                 onEdit: () => _showStoreEditor(context),
               ),
               const SizedBox(height: 24),
-              _AccountCard(auth: auth),
+              _AccountCard(auth: auth, session: session),
               const SizedBox(height: 12),
               Card(
                 child: ListTile(
@@ -633,9 +634,10 @@ class _OfflineCatalogCardState extends State<_OfflineCatalogCard> {
 }
 
 class _AccountCard extends StatelessWidget {
-  const _AccountCard({required this.auth});
+  const _AccountCard({required this.auth, required this.session});
 
   final AuthController auth;
+  final AppSession session;
 
   @override
   Widget build(BuildContext context) {
@@ -647,62 +649,140 @@ class _AccountCard extends StatelessWidget {
           color: AppColors.greenDark,
           child: Padding(
             padding: const EdgeInsets.all(18),
-            child: Row(
+            child: Column(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: AppColors.acid,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    signedIn
-                        ? Icons.cloud_done_rounded
-                        : Icons.person_outline_rounded,
-                    color: AppColors.greenDark,
-                  ),
-                ),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        signedIn ? 'Account connected' : 'Guest mode',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        color: AppColors.acid,
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(height: 3),
-                      Text(
+                      child: Icon(
                         signedIn
-                            ? auth.user?.email ?? 'Signed in securely'
-                            : 'Sign in to prepare for profile syncing.',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.66),
-                          fontSize: 13,
-                        ),
+                            ? Icons.cloud_done_rounded
+                            : Icons.person_outline_rounded,
+                        color: AppColors.greenDark,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            signedIn ? 'Account connected' : 'Guest mode',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            signedIn
+                                ? auth.user?.email ?? 'Signed in securely'
+                                : 'Sign in to prepare for profile syncing.',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.66),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: signedIn
+                          ? auth.signOut
+                          : () => _openAccountAccess(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.acid,
+                      ),
+                      child: Text(signedIn ? 'Sign out' : 'Sign in'),
+                    ),
+                  ],
                 ),
-                TextButton(
-                  onPressed: signedIn
-                      ? auth.signOut
-                      : () => _openAccountAccess(context),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.acid,
+                if (signedIn) ...[
+                  const SizedBox(height: 12),
+                  const Divider(color: Color(0x33FFFFFF), height: 1),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => _confirmAccountDeletion(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFFFB4AB),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
+                      icon: const Icon(Icons.delete_forever_outlined, size: 20),
+                      label: const Text('Delete account and app data'),
+                    ),
                   ),
-                  child: Text(signedIn ? 'Sign out' : 'Sign in'),
-                ),
+                ],
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  Future<void> _confirmAccountDeletion(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete your SafeBiteAI account?'),
+        content: const Text(
+          'This permanently deletes your Firebase account, removes this device from recall notifications, and clears family profiles, allergies, location and preferences from this device. Your Google account or Apple ID will not be deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            child: const Text('Delete permanently'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 18),
+              Expanded(child: Text('Deleting account and app data…')),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      await auth.deleteAccount(
+        beforeDelete: RecallNotificationService.instance.unregisterAndClear,
+      );
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      await session.resetPrototype();
+    } on AccountDeletionException catch (error) {
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
   }
 
   Future<void> _openAccountAccess(BuildContext context) async {

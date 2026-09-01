@@ -139,6 +139,12 @@ python3 scripts/build_offline_catalog.py \
   --base-url https://your-catalog-host.example/catalog
 ```
 
+The builder keeps only products with usable ingredient, allergen or trace
+evidence. It stores the product identity, full ingredient text, mapped household
+allergens, one specific category, ranking signals and a small image URL. Records
+without safety evidence are left to the online provider chain instead of taking
+up device storage without supporting an offline decision.
+
 Publish `manifest.json` and the generated `.jsonl.gz` file under
 `https://safebites-4a21a.web.app/catalog/`. The mobile app checks this manifest
 silently on startup and resume, throttled to once per 24 hours. A different
@@ -148,6 +154,11 @@ catalogue host can be selected at build time:
 flutter build ios \
   --dart-define=OFFLINE_CATALOG_MANIFEST_URL=https://your-catalog-host.example/catalog/manifest.json
 ```
+
+Firebase Hosting runs `scripts/stage_offline_catalog.sh` before every deploy.
+The script stages `dist/catalog` when a new pack has been built, otherwise it
+preserves the currently published pack. Deployment fails rather than removing
+the catalogue when neither source is valid.
 
 ## Web deployment
 

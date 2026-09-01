@@ -231,10 +231,12 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   List<String> _relevanceReasons(RecallAlert alert) {
     final reasons = <String>[];
-    final householdAllergens =
-        widget.session.family.expand((member) => member.allergenIds).toSet();
-    final matchingAllergens =
-        alert.allergenIds.where(householdAllergens.contains).toList();
+    final householdAllergens = Allergens.expandLegacyIds(
+      widget.session.family.expand((member) => member.allergenIds),
+    );
+    final matchingAllergens = Allergens.expandLegacyIds(alert.allergenIds)
+        .where(householdAllergens.contains)
+        .toList();
     if (matchingAllergens.isNotEmpty) {
       final labels = matchingAllergens
           .map((id) => Allergens.byId(id).label)

@@ -57,6 +57,79 @@ void main() {
     expect(openFoodFacts.lookupCalls, 0);
   });
 
+  test('matches an AI product identity to the local catalogue', () async {
+    const expected = ProductInfo(
+      barcode: '5449000131805',
+      name: 'Coca Cola Zero Sugar',
+      brand: 'Coca-Cola',
+      ingredients: 'Carbonated water, colour, sweeteners',
+      allergenIds: {},
+      traceAllergenIds: {},
+    );
+    const other = ProductInfo(
+      barcode: '5000000000099',
+      name: 'Chocolate Zero Sugar Bar',
+      brand: 'Another brand',
+      ingredients: 'Cocoa',
+      allergenIds: {},
+      traceAllergenIds: {},
+    );
+    final repository = _repository(
+      _MemoryStore([other, expected]),
+      openFoodFacts: _FakeOpenFoodFacts(product: onlineProduct),
+    );
+
+    final match = await repository.findLocalProduct(
+      name: 'Coca-Cola Zero Sugar',
+      brand: 'Coca Cola',
+    );
+
+    expect(match, expected);
+  });
+
+  test('does not guess from a generic AI product name', () async {
+    const candidate = ProductInfo(
+      barcode: '5000000000098',
+      name: 'Dark Chocolate Bar',
+      brand: 'Another brand',
+      ingredients: 'Cocoa',
+      allergenIds: {},
+      traceAllergenIds: {},
+    );
+    final repository = _repository(
+      _MemoryStore([candidate]),
+      openFoodFacts: _FakeOpenFoodFacts(product: onlineProduct),
+    );
+
+    final match = await repository.findLocalProduct(
+      name: 'Chocolate',
+    );
+
+    expect(match, isNull);
+  });
+
+  test('does not match a different flavour from the same brand', () async {
+    const candidate = ProductInfo(
+      barcode: '5000000000097',
+      name: 'Chocolate Corn Flakes',
+      brand: 'Example',
+      ingredients: 'Corn, cocoa, milk',
+      allergenIds: {'milk'},
+      traceAllergenIds: {},
+    );
+    final repository = _repository(
+      _MemoryStore([candidate]),
+      openFoodFacts: _FakeOpenFoodFacts(product: onlineProduct),
+    );
+
+    final match = await repository.findLocalProduct(
+      name: 'Corn Flakes',
+      brand: 'Example',
+    );
+
+    expect(match, isNull);
+  });
+
   test('stores Open Food Facts results for later offline checks', () async {
     final store = _MemoryStore();
     final repository = _repository(
@@ -263,6 +336,14 @@ class _MemoryStore implements ProductLocalStore {
   }
 
   @override
+  Future<List<ProductInfo>> searchByName(
+    String name, {
+    String brand = '',
+    int limit = 40,
+  }) async =>
+      products.values.take(limit).toList();
+
+  @override
   Future<void> markCatalogImported({
     required String version,
     required DateTime updatedAt,
@@ -349,6 +430,17 @@ class _FakeMissingReporter implements MissingProductReporter {
 }
 
 class _FakeCatalogImporter implements CatalogPackImporter {
+  @override
+  Future<OfflineCatalogManifest?> bundledManifest() async => null;
+
+  @override
+  Future<int> importBundled(
+    OfflineCatalogManifest manifest, {
+    required Future<void> Function(List<ProductInfo> products) onBatch,
+    void Function(int imported, int expected)? onProgress,
+  }) async =>
+      0;
+
   @override
   Future<int> import(
     OfflineCatalogManifest manifest, {

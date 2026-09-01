@@ -10,6 +10,7 @@ import 'missing_product_reporter.dart';
 import 'open_food_facts_service.dart';
 import 'paid_product_service.dart';
 import 'product_local_store.dart';
+import 'product_name_matcher.dart';
 import 'product_search_catalog.dart';
 
 enum ProductLookupOrigin {
@@ -144,6 +145,57 @@ class ProductRepository implements ProductSearchCatalog {
   }
 
   Future<OfflineCatalogStats> catalogStats() => _localStore.stats();
+
+  Future<int> bootstrapBundledCatalog({
+    void Function(int imported, int expected)? onProgress,
+  }) async {
+    if (!_localStore.supportsFullCatalog) return 0;
+    final manifest = await _catalogImporter.bundledManifest();
+    if (manifest == null) return 0;
+    final current = await _localStore.stats();
+    if (current.version == manifest.version &&
+        current.productCount >= manifest.productCount * 0.95) {
+      return 0;
+    }
+    final imported = await _catalogImporter.importBundled(
+      manifest,
+      onBatch: (products) => _localStore.upsertCatalogAll(
+        products,
+        version: manifest.version,
+      ),
+      onProgress: onProgress,
+    );
+    await _localStore.markCatalogImported(
+      version: manifest.version,
+      updatedAt: DateTime.now(),
+    );
+    return imported;
+  }
+
+  Future<ProductInfo?> findLocalProduct({
+    String barcode = '',
+    required String name,
+    String brand = '',
+  }) async {
+    try {
+      final normalizedBarcode = barcode.replaceAll(RegExp(r'\D'), '');
+      if (normalizedBarcode.length >= 8) {
+        final barcodeMatch = await _localStore.findByBarcode(normalizedBarcode);
+        if (barcodeMatch != null) return barcodeMatch;
+      }
+      final candidates = await _localStore.searchByName(
+        name,
+        brand: brand,
+      );
+      return bestProductNameMatch(
+        name: name,
+        brand: brand,
+        candidates: candidates,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<int> syncOfflineCatalog({
     void Function(int imported, int expected)? onProgress,

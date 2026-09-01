@@ -6,6 +6,8 @@
   <meta name="theme-color" content="#102617">
   <title>SafeBiteAI Privacy Policy</title>
   <link rel="canonical" href="https://safebiteai.co.uk/privacy">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <meta name="description" content="SafeBiteAI privacy policy and information about household profiles, location, barcode checks and AI alternatives.">
   <style>
     :root {
@@ -69,7 +71,7 @@
 <body>
   <main>
     <header>
-      <img class="mark" src="/icons/Icon-192.png" alt="SafeBiteAI logo">
+      <img class="mark" src="icons/Icon-192.png" alt="SafeBiteAI logo">
       <h1>Privacy,<br>made clear.</h1>
       <p>How SafeBiteAI uses the minimum information needed for family allergen checks, nearby hygiene searches, recalls and product alternatives.</p>
     </header>
@@ -104,12 +106,17 @@
 
       <section>
         <h2>Barcode and label checks</h2>
-        <p>SafeBiteAI checks its on-device catalogue first. If a product is not available locally, the barcode is sent to Open Food Facts and eligible results may be stored on your device for later offline use. If Open Food Facts has no result, signed-in users may request a live FatSecret lookup through Firebase. FatSecret product details are not added to SafeBiteAI’s database or local catalogue. If no provider has a result, SafeBiteAI records the barcode, scan count and review status in Firebase for manual research without attaching household or allergy information. Ingredient-label photographs are processed on your device and are not uploaded by SafeBiteAI.</p>
+        <p>SafeBiteAI checks its on-device catalogue first. If a product is not available locally, the barcode is sent to Open Food Facts and eligible results may be stored on your device for later offline use. If Open Food Facts has no result, signed-in users may request a live FatSecret lookup through Firebase. FatSecret product details are not added to SafeBiteAI’s database or local catalogue. If no provider has a result, SafeBiteAI records the barcode, scan count and review status in Firebase for manual research without attaching household or allergy information. Photographs used by the standard ingredient-label scanner are processed on your device. A photograph is uploaded only when you explicitly choose the AI food assistant.</p>
       </section>
 
       <section>
         <h2>AI alternative ranking</h2>
         <p>Your device first removes alternatives with household allergen or trace conflicts. If you request AI ranking while signed in, only product details from that filtered shortlist are sent through an authenticated Firebase Cloud Function to the OpenAI API. Family names, allergy choices and location are not sent to OpenAI. Requests use <code>store=false</code>. OpenAI may retain API abuse-monitoring logs for up to 30 days under its applicable controls.</p>
+      </section>
+
+      <section>
+        <h2>AI food assistant</h2>
+        <p>When a signed-in user chooses the AI food assistant, the selected product photograph, their typed food question and a short product-only conversation are sent through an authenticated Firebase Cloud Function to the OpenAI API. SafeBiteAI does not send household names, allergy choices or location to OpenAI. Images are used to identify visible packaging and extract visible label evidence; they are not stored in a SafeBiteAI database. Requests use <code>store=false</code>. OpenAI may retain API abuse-monitoring logs for up to 30 days under its applicable controls. You can use barcode and on-device label checks without using this feature.</p>
       </section>
 
       <section>
@@ -126,9 +133,9 @@
           <li><a href="https://platform.fatsecret.com/terms">FatSecret</a> provides optional live fallback product results, which SafeBiteAI does not retain.</li>
           <li><a href="https://ratings.food.gov.uk/terms-and-conditions">UK Food Standards Agency</a> hygiene data is used under the Open Government Licence.</li>
           <li><a href="https://postcodes.io/docs/licences/">Postcodes.io</a> supplies postcode coordinate data from listed open-data sources.</li>
-          <li><a href="https://platform.openai.com/docs/models/default-usage-policies-by-endpoint">OpenAI</a> provides optional product-ranking explanations.</li>
+          <li><a href="https://platform.openai.com/docs/models/default-usage-policies-by-endpoint">OpenAI</a> provides optional product-image interpretation, food-assistant answers and product-ranking explanations.</li>
         </ul>
-        <p>Providers may receive network information such as your IP address and apply their own security, retention and international-transfer arrangements.</p>
+        <p>Providers may receive network information such as your IP address and apply their own security, retention and international-transfer arrangements. Where a provider processes personal data for SafeBiteAI, we require protection consistent with this policy and applicable data-protection law and use limited to the agreed service.</p>
       </section>
 
       <section>
@@ -138,12 +145,17 @@
 
       <section>
         <h2>Automated processing</h2>
-        <p>SafeBiteAI uses rules to flag possible allergen conflicts and may use AI to rank product alternatives. These results are informational suggestions only. They do not make decisions that produce legal or similarly significant effects, and you remain in control of every purchase and safety decision.</p>
+        <p>SafeBiteAI uses rules to flag possible allergen conflicts and may use AI to interpret visible product images, answer product questions and rank alternatives. AI image analysis can be incomplete or incorrect and never guarantees that a food is safe. These results are informational suggestions only. They do not make decisions that produce legal or similarly significant effects, and you remain in control of every purchase and safety decision.</p>
       </section>
 
       <section>
         <h2>Retention</h2>
-        <p>Local information remains until you delete profiles, reset the app, clear browser storage or uninstall. SafeBiteAI retains missing barcodes until they are researched, resolved or no longer needed for catalogue improvement. Live FatSecret product responses are not retained by SafeBiteAI. Recall installation records are updated while notifications remain enabled and invalid tokens are deleted when detected. Firebase account information remains while your account is active and for a limited period where needed for security, legal obligations or dispute handling.</p>
+        <p>Local information remains until you delete profiles, delete your account, reset the app, clear browser storage or uninstall. SafeBiteAI retains missing barcodes until they are researched, resolved or no longer needed for catalogue improvement. Live FatSecret product responses are not retained by SafeBiteAI. Recall installation records are updated while notifications remain enabled and invalid tokens are deleted when detected. Firebase account information remains while your account is active and for a limited period where needed for security, legal obligations or dispute handling.</p>
+      </section>
+
+      <section>
+        <h2>Account deletion</h2>
+        <p>Signed-in users can permanently delete their SafeBiteAI account from <strong>Family → Account connected → Delete account and app data</strong>. This deletes the Firebase Authentication account, removes that device’s recall registration and clears household profiles, allergy choices, location and preferences stored by SafeBiteAI on that device. It does not delete the user’s Google account or Apple ID. Contact <a href="mailto:support@safebiteai.co.uk">support@safebiteai.co.uk</a> if you need assistance.</p>
       </section>
 
       <section>
@@ -164,7 +176,7 @@
       <section>
         <h2>Changes to this policy</h2>
         <p>We will update this policy when SafeBiteAI’s features or data practices change and show the new effective date. Material changes will be brought to users’ attention before new processing begins.</p>
-        <span class="effective">Effective 29 August 2026</span>
+        <span class="effective">Effective 31 August 2026</span>
       </section>
     </article>
 

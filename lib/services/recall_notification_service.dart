@@ -212,6 +212,41 @@ class RecallNotificationService extends ChangeNotifier {
     }
   }
 
+  Future<void> unregisterAndClear() async {
+    final preferences = await SharedPreferences.getInstance();
+    final installationId =
+        preferences.getString(_installationIdKey)?.trim().toLowerCase() ?? '';
+    if (RegExp(r'^[a-f0-9]{32}$').hasMatch(installationId)) {
+      try {
+        final callable = _functions.httpsCallable(
+          'deleteRecallInstallation',
+          options: HttpsCallableOptions(timeout: _registrationTimeout),
+        );
+        await callable.call<dynamic>({'installationId': installationId});
+      } catch (_) {}
+    }
+
+    if (isSupported) {
+      try {
+        await FirebaseMessaging.instance
+            .deleteToken()
+            .timeout(_messagingTimeout);
+      } catch (_) {}
+    }
+
+    _unreadAlertIds.clear();
+    _hasUnmatchedUnread = false;
+    await Future.wait([
+      preferences.remove(_installationIdKey),
+      preferences.remove(_registrationFingerprintKey),
+      preferences.remove(_registrationSyncedAtKey),
+      preferences.remove(_unreadAlertIdsKey),
+      preferences.remove(_unmatchedUnreadKey),
+    ]);
+    await _syncNativeBadge();
+    notifyListeners();
+  }
+
   Future<void> _removeLegacyTopicSubscriptions(
     SharedPreferences preferences,
   ) async {

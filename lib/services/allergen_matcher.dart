@@ -22,8 +22,22 @@ abstract final class AllergenMatcher {
       );
     }
 
-    final detected = product.allergenIds.intersection(member.allergenIds);
-    final traces = product.traceAllergenIds.intersection(member.allergenIds);
+    final memberAllergenIds = Allergens.expandLegacyIds(member.allergenIds);
+    final detected = Allergens.expandLegacyIds(product.allergenIds)
+        .intersection(memberAllergenIds);
+    final traces = Allergens.expandLegacyIds(product.traceAllergenIds)
+        .intersection(memberAllergenIds);
+    final normalizedIngredients = product.ingredients.toLowerCase();
+    if (normalizedIngredients.isNotEmpty) {
+      for (final id in memberAllergenIds) {
+        final option = Allergens.byId(id);
+        if (option.terms.any(
+          (term) => _containsTerm(normalizedIngredients, term),
+        )) {
+          detected.add(id);
+        }
+      }
+    }
     final level = detected.isNotEmpty
         ? MatchLevel.avoid
         : traces.isNotEmpty

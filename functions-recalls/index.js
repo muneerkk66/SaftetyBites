@@ -11,6 +11,7 @@ import {
   chunks,
   isInvalidMessagingToken,
   normalizeInstallation,
+  normalizeInstallationId,
 } from "./recall_delivery.js";
 
 initializeApp();
@@ -87,6 +88,25 @@ export const syncRecallInstallation = onCall(
       registered: installation.retailerIds.length > 0,
       retailerCount: installation.retailerIds.length,
     };
+  },
+);
+
+export const deleteRecallInstallation = onCall(
+  {
+    region: "europe-west2",
+    timeoutSeconds: 15,
+    memory: "256MiB",
+    maxInstances: 20,
+  },
+  async (request) => {
+    let installationId;
+    try {
+      installationId = normalizeInstallationId(request.data);
+    } catch (error) {
+      throw new HttpsError("invalid-argument", error.message);
+    }
+    await installationsCollection.doc(installationId).delete();
+    return {deleted: true};
   },
 );
 
