@@ -11,6 +11,17 @@ from urllib.request import Request, urlopen
 
 csv.field_size_limit(sys.maxsize)
 
+ATTRIBUTION = """SafeBiteAI UK offline food catalogue
+
+Contains information from Open Food Facts, which is made available under the
+Open Database Licence (ODbL) 1.0:
+https://opendatacommons.org/licenses/odbl/1-0/
+
+Individual database contents are available under DbCL 1.0 and Open Food Facts
+product images are available under CC BY-SA 3.0. SafeBiteAI filters and
+reformats the source export. Full notices: https://safebiteai.co.uk/data-licences
+"""
+
 
 ALLERGEN_MAP = {
     "peanuts": "peanuts",
@@ -164,12 +175,18 @@ def main():
     manifest = {
         "version": args.version,
         "downloadUrl": download_url,
+        "attributionUrl": f"{args.base_url.rstrip('/')}/ATTRIBUTION.txt",
+        "sourceUrl": "https://world.openfoodfacts.org/data",
+        "databaseLicense": "ODbL-1.0",
+        "contentsLicense": "DbCL-1.0",
+        "imageLicense": "CC-BY-SA-3.0",
         "sha256": digest,
         "productCount": count,
     }
     (output_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
+    (output_dir / "ATTRIBUTION.txt").write_text(ATTRIBUTION, encoding="utf-8")
     print(f"Built {count:,} UK products: {output_path}")
 
 

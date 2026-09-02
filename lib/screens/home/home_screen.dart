@@ -5,9 +5,11 @@ import '../../core/app_theme.dart';
 import '../../core/auth_controller.dart';
 import '../../models/allergen.dart';
 import '../../models/family_member.dart';
+import '../../models/product.dart';
 import '../../widgets/brand_mark.dart';
 import '../../widgets/member_avatar.dart';
 import '../../widgets/section_heading.dart';
+import '../scan/product_check_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -70,14 +72,24 @@ class HomeScreen extends StatelessWidget {
                     ),
                     if (session.recentlyChecked.isNotEmpty) ...[
                       const SizedBox(height: 28),
-                      const SectionHeading(title: 'Recently checked'),
+                      SectionHeading(
+                        title: 'Recently checked',
+                        subtitle:
+                            '${session.recentlyChecked.length} saved product${session.recentlyChecked.length == 1 ? '' : 's'}',
+                        trailing: session.recentlyChecked.length > 3
+                            ? TextButton(
+                                onPressed: () => _showHistory(context),
+                                child: const Text('View all'),
+                              )
+                            : null,
+                      ),
                       const SizedBox(height: 13),
                       ...session.recentlyChecked.take(3).map(
                             (product) => Padding(
                               padding: const EdgeInsets.only(bottom: 10),
                               child: _RecentProductCard(
-                                name: product.name,
-                                brand: product.brand,
+                                product: product,
+                                onTap: () => _openProduct(context, product),
                               ),
                             ),
                           ),
@@ -88,6 +100,43 @@ class HomeScreen extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _openProduct(
+    BuildContext context,
+    ProductInfo product,
+  ) async {
+    final scanAgain = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => ProductCheckScreen(
+          session: session,
+          product: product,
+        ),
+      ),
+    );
+    if (scanAgain == true) onScan();
+  }
+
+  Future<void> _showHistory(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.86,
+        child: _ProductHistorySheet(
+          products: session.recentlyChecked,
+          onOpen: (product) {
+            Navigator.of(sheetContext).pop();
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _openProduct(context, product),
+            );
+          },
+        ),
       ),
     );
   }
@@ -533,41 +582,130 @@ class _MiniAllergenChip extends StatelessWidget {
 }
 
 class _RecentProductCard extends StatelessWidget {
-  const _RecentProductCard({required this.name, required this.brand});
+  const _RecentProductCard({required this.product, required this.onTap});
 
-  final String name;
-  final String brand;
+  final ProductInfo product;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                gradient: AppGradients.sunset,
-                borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              _ProductThumbnail(product: product),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      product.brand,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
               ),
-              child: const Icon(Icons.shopping_bag_outlined,
-                  color: AppColors.green),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(brand, style: Theme.of(context).textTheme.bodyMedium),
-                ],
-              ),
-            ),
-            const Icon(Icons.check_circle_rounded, color: AppColors.green),
-          ],
+              const Icon(Icons.chevron_right_rounded, color: AppColors.green),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _ProductHistorySheet extends StatelessWidget {
+  const _ProductHistorySheet({
+    required this.products,
+    required this.onOpen,
+  });
+
+  final List<ProductInfo> products;
+  final ValueChanged<ProductInfo> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 4, 22, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Product history',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${products.length} recently checked product${products.length == 1 ? '' : 's'}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
+            itemCount: products.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 9),
+            itemBuilder: (context, index) {
+              final product = products[index];
+              return _RecentProductCard(
+                product: product,
+                onTap: () => onOpen(product),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductThumbnail extends StatelessWidget {
+  const _ProductThumbnail({required this.product});
+
+  final ProductInfo product;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = product.imageUrl?.trim();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 52,
+        height: 52,
+        color: AppColors.greenSoft,
+        child: imageUrl == null || imageUrl.isEmpty
+            ? const Icon(
+                Icons.shopping_bag_outlined,
+                color: AppColors.green,
+              )
+            : Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.shopping_bag_outlined,
+                  color: AppColors.green,
+                ),
+              ),
       ),
     );
   }

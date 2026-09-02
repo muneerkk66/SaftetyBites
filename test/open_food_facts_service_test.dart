@@ -6,6 +6,30 @@ import 'package:http/testing.dart';
 import 'package:safebite/services/open_food_facts_service.dart';
 
 void main() {
+  test('product lookup identifies SafeBiteAI to Open Food Facts', () async {
+    late http.Request captured;
+    final service = OpenFoodFactsService(
+      client: MockClient((request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode({
+            'product': {
+              'code': '5000112546415',
+              'product_name': 'Example product',
+            },
+          }),
+          200,
+        );
+      }),
+    );
+
+    await service.lookup('5000112546415');
+
+    expect(captured.headers['User-Agent'], contains('SafeBiteAI/1.0'));
+    expect(
+        captured.headers['User-Agent'], contains('support@safebiteai.co.uk'));
+  });
+
   test('alternative search uses one lightweight category request', () async {
     final requests = <http.Request>[];
     final service = OpenFoodFactsService(

@@ -1,0 +1,27 @@
+SafeBiteAI UK offline food catalogue
+
+Contains information from Open Food Facts, which is made available under the
+Open Database Licence (ODbL) 1.0:
+https://opendatacommons.org/licenses/odbl/1-0/
+
+The individual database contents are available under the Database Contents
+Licence (DbCL) 1.0:
+https://opendatacommons.org/licenses/dbcl/1-0/
+
+Open Food Facts product images are made available by their contributors under
+Creative Commons Attribution-ShareAlike 3.0 (CC BY-SA 3.0). Packaging may
+contain third-party rights:
+https://creativecommons.org/licenses/by-sa/3.0/
+
+Source database: https://world.openfoodfacts.org/data
+Open Food Facts contributors: https://world.openfoodfacts.org
+
+SafeBiteAI filters the Open Food Facts export to UK products with usable
+ingredient or allergen evidence, selects a limited set of fields, maps allergen
+tags to SafeBiteAI categories, and serialises the result as compressed JSONL.
+The resulting adapted database is offered under ODbL 1.0. The transformation
+method is published at:
+https://github.com/muneerkk66/SaftetyBites/blob/main/scripts/build_offline_catalog.py
+
+Open Food Facts does not endorse SafeBiteAI. Community data may be incomplete
+or outdated. Always verify the current product label.

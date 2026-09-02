@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -19,6 +20,7 @@ class AppSession extends ChangeNotifier {
     required this.selectedStores,
     required this.family,
     required this.healthDataConsent,
+    required this.recentlyChecked,
   }) : _preferences = preferences;
 
   static const _onboardingKey = 'onboarding_complete';
@@ -31,6 +33,7 @@ class AppSession extends ChangeNotifier {
   static const _storesKey = 'selected_stores';
   static const _familyKey = 'family';
   static const _healthDataConsentKey = 'health_data_consent_v1';
+  static const _recentlyCheckedKey = 'recently_checked_products_v1';
 
   final SharedPreferences _preferences;
 
@@ -44,7 +47,7 @@ class AppSession extends ChangeNotifier {
   Set<String> selectedStores;
   List<FamilyMember> family;
   bool healthDataConsent;
-  final List<ProductInfo> recentlyChecked = [];
+  final List<ProductInfo> recentlyChecked;
 
   static Future<AppSession> load() async {
     final preferences = await SharedPreferences.getInstance();
@@ -54,6 +57,10 @@ class AppSession extends ChangeNotifier {
         : (jsonDecode(rawFamily) as List<dynamic>)
             .map((item) => FamilyMember.fromJson(item as Map<String, dynamic>))
             .toList();
+    final rawRecentlyChecked = preferences.getString(_recentlyCheckedKey);
+    final recentlyChecked = rawRecentlyChecked == null
+        ? <ProductInfo>[]
+        : _decodeRecentlyChecked(rawRecentlyChecked);
 
     return AppSession._(
       preferences: preferences,
@@ -69,6 +76,7 @@ class AppSession extends ChangeNotifier {
       ),
       family: family,
       healthDataConsent: preferences.getBool(_healthDataConsentKey) ?? false,
+      recentlyChecked: recentlyChecked,
     );
   }
 
@@ -133,7 +141,8 @@ class AppSession extends ChangeNotifier {
   void saveCheckedProduct(ProductInfo product) {
     recentlyChecked.removeWhere((item) => item.barcode == product.barcode);
     recentlyChecked.insert(0, product);
-    if (recentlyChecked.length > 10) recentlyChecked.removeLast();
+    if (recentlyChecked.length > 100) recentlyChecked.removeLast();
+    unawaited(_persistRecentlyChecked());
     notifyListeners();
   }
 
@@ -214,5 +223,27 @@ class AppSession extends ChangeNotifier {
       _familyKey,
       jsonEncode(family.map((member) => member.toJson()).toList()),
     );
+  }
+
+  Future<void> _persistRecentlyChecked() {
+    return _preferences.setString(
+      _recentlyCheckedKey,
+      jsonEncode(recentlyChecked.map((product) => product.toJson()).toList()),
+    );
+  }
+
+  static List<ProductInfo> _decodeRecentlyChecked(String value) {
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! List<dynamic>) return <ProductInfo>[];
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(ProductInfo.fromJson)
+          .where((product) => product.barcode.isNotEmpty)
+          .take(100)
+          .toList();
+    } catch (_) {
+      return <ProductInfo>[];
+    }
   }
 }

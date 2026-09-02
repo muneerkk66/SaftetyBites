@@ -745,6 +745,11 @@ class _EstablishmentCard extends StatelessWidget {
                               icon: Icons.near_me_outlined,
                               label: '${distance.toStringAsFixed(1)} mi',
                             ),
+                          if (establishment.ratingDateLabel case final date?)
+                            _SmallChip(
+                              icon: Icons.event_available_outlined,
+                              label: 'Inspected $date',
+                            ),
                           if (establishment.newRatingPending)
                             const _SmallChip(
                               icon: Icons.update_rounded,

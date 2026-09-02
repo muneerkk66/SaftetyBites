@@ -28,6 +28,8 @@ class OpenFoodFactsService implements ProductSearchCatalog {
       : _client = client ?? http.Client();
 
   final http.Client _client;
+  static const _userAgent =
+      'SafeBiteAI/1.0 (https://safebiteai.co.uk; support@safebiteai.co.uk)';
 
   Future<ProductInfo> lookup(String barcode) async {
     final normalized = barcode.replaceAll(RegExp(r'\D'), '');
@@ -41,7 +43,7 @@ class OpenFoodFactsService implements ProductSearchCatalog {
     final uri = Uri.https(
       'world.openfoodfacts.org',
       '/api/v3/product/$normalized',
-      {
+      _identifiedQuery({
         'fields': [
           'code',
           'product_name',
@@ -54,16 +56,12 @@ class OpenFoodFactsService implements ProductSearchCatalog {
           'popularity_key',
           'image_front_small_url',
         ].join(','),
-      },
+      }),
     );
 
     try {
-      final headers = <String, String>{'Accept': 'application/json'};
-      if (!kIsWeb) {
-        headers['User-Agent'] = 'SafeBiteAI/1.0 (support@safebiteai.co.uk)';
-      }
       final response = await _client
-          .get(uri, headers: headers)
+          .get(uri, headers: _headers())
           .timeout(const Duration(seconds: 12));
       if (response.statusCode != 200) {
         throw const ProductLookupException(
@@ -116,7 +114,7 @@ class OpenFoodFactsService implements ProductSearchCatalog {
       final uri = Uri.https(
         'world.openfoodfacts.org',
         '/api/v2/search',
-        {
+        _identifiedQuery({
           'categories_tags': category,
           'countries_tags_en': 'united-kingdom',
           'sort_by': 'last_modified_t',
@@ -134,7 +132,7 @@ class OpenFoodFactsService implements ProductSearchCatalog {
             'popularity_key',
             'image_front_small_url',
           ].join(','),
-        },
+        }),
       );
 
       try {
@@ -185,10 +183,15 @@ class OpenFoodFactsService implements ProductSearchCatalog {
   Map<String, String> _headers() {
     final headers = <String, String>{'Accept': 'application/json'};
     if (!kIsWeb) {
-      headers['User-Agent'] = 'SafeBiteAI/1.0 (support@safebiteai.co.uk)';
+      headers['User-Agent'] = _userAgent;
     }
     return headers;
   }
+
+  Map<String, String> _identifiedQuery(Map<String, String> query) => {
+        ...query,
+        if (kIsWeb) 'User-Agent': _userAgent,
+      };
 
   String _text(dynamic value, {String fallback = ''}) {
     final text = value?.toString().trim() ?? '';

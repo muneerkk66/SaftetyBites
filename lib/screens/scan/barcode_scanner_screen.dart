@@ -111,7 +111,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Barcode data may be incomplete. SafeBiteAI will ask you to scan the current label next.',
+                                'SafeBiteAI checks available product and allergen data. Always verify the current package label.',
                                 style: TextStyle(
                                     color: AppColors.ink, height: 1.35),
                               ),
@@ -174,8 +174,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           ProductLookupOrigin.paidLive => 'Found using live provider data',
         };
       });
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
           builder: (_) =>
               ProductCheckScreen(session: widget.session, product: product),
         ),

@@ -145,6 +145,12 @@ allergens, one specific category, ranking signals and a small image URL. Records
 without safety evidence are left to the online provider chain instead of taking
 up device storage without supporting an offline decision.
 
+The filtered catalogue remains available under ODbL 1.0. Its manifest and
+`ATTRIBUTION.txt` identify Open Food Facts, DbCL 1.0 and CC BY-SA 3.0, describe
+the transformation, and link to the corresponding licence texts. The public
+catalogue pack and this transformation script provide the machine-readable
+adapted database and method used to create it.
+
 Publish `manifest.json` and the generated `.jsonl.gz` file under
 `https://safebites-4a21a.web.app/catalog/`. The mobile app checks this manifest
 silently on startup and resume, throttled to once per 24 hours. A different

@@ -97,6 +97,11 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   'Firebase Authentication, Cloud Functions, Cloud Firestore, Cloud Messaging and the missing-barcode review queue are provided by Google. Apple provides Sign in with Apple and APNs notification delivery when you choose those options. Product data and images come from Open Food Facts, with FatSecret used as a live fallback where configured. Hygiene ratings and food alerts come from the UK Food Standards Agency. Google Places supplies food-business photos. Postcode coordinates come from Postcodes.io. AI ranking is provided by OpenAI. These providers may receive network information such as your IP address and apply their own security, retention and international-transfer arrangements. Where a provider processes personal data for SafeBiteAI, we require protection consistent with this policy and applicable data-protection law and use limited to the agreed service.',
             ),
             const _PolicySection(
+              title: 'Public-data licences',
+              body:
+                  'Contains information from Open Food Facts, which is made available under the Open Database Licence (ODbL 1.0). SafeBiteAI’s filtered UK offline catalogue is an adapted database offered under ODbL 1.0; individual contents are available under the Database Contents Licence, and Open Food Facts product images are available under CC BY-SA 3.0. SafeBiteAI filters and reformats source records. Food hygiene ratings and food alerts contain Food Standards Agency Crown copyright information used under the Open Government Licence v3.0. SafeBiteAI is not endorsed by Open Food Facts, the Food Standards Agency or the UK Government. Full notices and source links are at safebiteai.co.uk/data-licences.',
+            ),
+            const _PolicySection(
               title: 'International transfers',
               body:
                   'Some providers, including Firebase and OpenAI, may process personal data outside the UK, including in the United States. Where UK data-protection law restricts a transfer, we rely on the provider’s applicable safeguards, such as an adequacy decision, the UK International Data Transfer Addendum or approved contractual clauses. Contact us for more information about the safeguards relevant to your data.',
@@ -137,7 +142,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   'We will update this policy when SafeBiteAI’s features or data practices change and will show the new effective date. Material changes will be brought to users’ attention before the new processing begins.',
             ),
             const SizedBox(height: 12),
-            Text('Effective: 31 August 2026',
+            Text('Effective: 1 September 2026',
                 style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 4),
             const SelectableText(

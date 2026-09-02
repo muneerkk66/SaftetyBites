@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_session.dart';
@@ -7,7 +6,6 @@ import '../../models/allergen.dart';
 import '../../models/family_member.dart';
 import '../../models/product.dart';
 import '../../services/allergen_matcher.dart';
-import '../../services/label_scanner_service.dart';
 import '../../services/product_alternative_service.dart';
 import '../../widgets/member_avatar.dart';
 
@@ -26,10 +24,8 @@ class ProductCheckScreen extends StatefulWidget {
 }
 
 class _ProductCheckScreenState extends State<ProductCheckScreen> {
-  final _labelService = LabelScannerService();
   final _alternativeService = ProductAlternativeService();
   late ProductInfo _product;
-  bool _readingLabel = false;
   bool _findingAlternatives = false;
   AlternativeSearchResult? _alternativeResult;
   String? _alternativeError;
@@ -51,6 +47,11 @@ class _ProductCheckScreenState extends State<ProductCheckScreen> {
       appBar: AppBar(
         title: const Text('Product check'),
         actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.qr_code_scanner_rounded, size: 19),
+            label: const Text('Scan again'),
+          ),
           IconButton(
             tooltip: 'Important information',
             onPressed: _showSafetyNotice,
@@ -98,118 +99,11 @@ class _ProductCheckScreenState extends State<ProductCheckScreen> {
               child: _MemberResultCard(member: member, assessment: assessment),
             );
           }),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _readingLabel ? null : _checkCurrentLabel,
-            icon: _readingLabel
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(kIsWeb
-                    ? Icons.edit_note_rounded
-                    : Icons.document_scanner_outlined),
-            label: Text(
-              _readingLabel
-                  ? 'Reading label…'
-                  : kIsWeb
-                      ? 'Enter current label text'
-                      : 'Scan current ingredients label',
-            ),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _enterIngredientsManually,
-            icon: const Icon(Icons.keyboard_outlined, color: AppColors.green),
-            label: const Text('Type or paste ingredients'),
-          ),
           const SizedBox(height: 24),
           _DataSourceCard(product: _product),
         ],
       ),
     );
-  }
-
-  Future<void> _checkCurrentLabel() async {
-    if (kIsWeb) {
-      await _enterIngredientsManually();
-      return;
-    }
-    setState(() => _readingLabel = true);
-    try {
-      final scan = await _labelService.scanIngredients();
-      if (scan == null || !mounted) return;
-      setState(() {
-        _product = _labelService.mergeWithProduct(_product, scan);
-        _alternativeResult = null;
-        _alternativeError = null;
-        widget.session.saveCheckedProduct(_product);
-      });
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('We could not read that label. Try a clearer photo.')),
-      );
-    } finally {
-      if (mounted) setState(() => _readingLabel = false);
-    }
-  }
-
-  Future<void> _enterIngredientsManually() async {
-    final controller = TextEditingController(text: _product.ingredients);
-    final text = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      builder: (context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          22,
-          22,
-          22,
-          MediaQuery.of(context).viewInsets.bottom + 22,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Current ingredients',
-                style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 7),
-            Text(
-              'Include any “may contain” wording from the package.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              minLines: 5,
-              maxLines: 9,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: 'Ingredients: ...'),
-            ),
-            const SizedBox(height: 14),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('Check label text'),
-            ),
-          ],
-        ),
-      ),
-    );
-    controller.dispose();
-    if (text == null || text.trim().isEmpty) return;
-    final scan = _labelService.fromText(text);
-    setState(() {
-      _product = _labelService.mergeWithProduct(_product, scan);
-      _alternativeResult = null;
-      _alternativeError = null;
-      widget.session.saveCheckedProduct(_product);
-    });
   }
 
   Future<void> _findAlternatives() async {
@@ -240,12 +134,13 @@ class _ProductCheckScreenState extends State<ProductCheckScreen> {
 
   Future<void> _openAlternative(ProductInfo product) async {
     widget.session.saveCheckedProduct(product);
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final scanAgain = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
         builder: (_) =>
             ProductCheckScreen(session: widget.session, product: product),
       ),
     );
+    if (scanAgain == true && mounted) Navigator.of(context).pop(true);
   }
 
   MatchLevel _overallLevel(List<MemberAssessment> assessments) {
@@ -690,56 +585,19 @@ class _DataSourceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isOpenFoodFacts = product.dataSource.contains('Open Food Facts');
     final isPaidLive = product.dataSource.contains('FatSecret');
-    final detail = isOpenFoodFacts
-        ? 'Product data: ${product.dataSource}, available under the Open Database Licence. Product images are available under CC BY-SA. Community data may be incomplete or outdated; the current package label takes priority.'
-        : 'Product data: ${product.dataSource}. This result is shown live and is not saved to SafeBiteAI’s product database. Allergen coverage may be incomplete, so verify the current package label.';
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.canvas,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.storage_outlined,
-              color: AppColors.inkSoft, size: 21),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isPaidLive) ...[
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.greenDark,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'FATSECRET LIVE · PAID LOOKUP',
-                      style: TextStyle(
-                        color: AppColors.acid,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                Text(
-                  detail,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(fontSize: 12),
-                ),
-              ],
+    final detail = isOpenFoodFacts || !isPaidLive
+        ? 'Data licence: safebiteai.co.uk/data-licences. Always verify the current package label.'
+        : 'Live product data is not saved to SafeBiteAI’s product database. Always verify the current package label. Licence details: safebiteai.co.uk/data-licences.';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Text(
+        detail,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.inkSoft,
+              fontSize: 10,
+              height: 1.35,
             ),
-          ),
-        ],
       ),
     );
   }
@@ -796,11 +654,11 @@ class _ResultConfig {
           background: AppColors.greenSoft,
         ),
       MatchLevel.unableToVerify => const _ResultConfig(
-          title: 'Product found — label needed',
+          title: 'Ingredient details unavailable',
           detail:
-              'We identified the product, but its online ingredient list is missing. Scan the current package label to check it safely.',
-          shortDetail: 'More label information needed',
-          badge: 'LABEL NEEDED',
+              'We identified the product, but cannot verify its ingredients. Check the current package label before buying or eating.',
+          shortDetail: 'Check the current package label',
+          badge: 'CHECK LABEL',
           icon: Icons.question_mark_rounded,
           color: AppColors.inkSoft,
           background: AppColors.line,

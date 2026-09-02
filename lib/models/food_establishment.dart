@@ -35,6 +35,26 @@ class FoodEstablishment {
 
   int? get numericRating => int.tryParse(rating);
 
+  String? get ratingDateLabel {
+    final date = ratingDate;
+    if (date == null) return null;
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
   String get ratingSummary {
     final value = numericRating;
     if (value != null) {

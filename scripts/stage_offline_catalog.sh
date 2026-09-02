@@ -7,6 +7,12 @@ catalog_dir="$build_dir/catalog"
 local_catalog_dir="${OFFLINE_CATALOG_SOURCE_DIR:-dist/catalog}"
 manifest_url="${OFFLINE_CATALOG_MANIFEST_URL:-https://safebites-4a21a.web.app/catalog/manifest.json}"
 
+if [[ -f "assets/catalog/manifest.json" ]] &&
+  { [[ ! -f "$local_catalog_dir/manifest.json" ]] ||
+    ! grep -q '"attributionUrl"' "$local_catalog_dir/manifest.json"; }; then
+  local_catalog_dir="assets/catalog"
+fi
+
 mkdir -p "$catalog_dir"
 
 if [[ -f "$local_catalog_dir/manifest.json" ]]; then
@@ -17,6 +23,14 @@ import pathlib
 import shutil
 import sys
 import urllib.parse
+
+ATTRIBUTION = """SafeBiteAI UK offline food catalogue
+
+Contains information from Open Food Facts, made available under ODbL 1.0.
+Individual contents are available under DbCL 1.0. Product images are available
+under CC BY-SA 3.0. SafeBiteAI filters and reformats the source export.
+Full notices: https://safebiteai.co.uk/data-licences
+"""
 
 manifest_path = pathlib.Path(sys.argv[1])
 source_dir = pathlib.Path(sys.argv[2])
@@ -33,6 +47,11 @@ for item in target_dir.iterdir():
     shutil.rmtree(item) if item.is_dir() else item.unlink()
 shutil.copy2(manifest_path, target_dir / "manifest.json")
 shutil.copy2(source, target_dir / filename)
+notice = pathlib.Path("assets/catalog/ATTRIBUTION.txt")
+if notice.is_file():
+    shutil.copy2(notice, target_dir / "ATTRIBUTION.txt")
+else:
+    (target_dir / "ATTRIBUTION.txt").write_text(ATTRIBUTION, encoding="utf-8")
 print(f"Staged offline catalogue: {manifest['productCount']:,} products")
 PY
   exit 0
@@ -55,6 +74,14 @@ import shutil
 import subprocess
 import sys
 import urllib.parse
+
+ATTRIBUTION = """SafeBiteAI UK offline food catalogue
+
+Contains information from Open Food Facts, made available under ODbL 1.0.
+Individual contents are available under DbCL 1.0. Product images are available
+under CC BY-SA 3.0. SafeBiteAI filters and reformats the source export.
+Full notices: https://safebiteai.co.uk/data-licences
+"""
 
 manifest_path = pathlib.Path(sys.argv[1])
 manifest_url = sys.argv[2]
@@ -95,5 +122,10 @@ for item in target_dir.iterdir():
     shutil.rmtree(item) if item.is_dir() else item.unlink()
 shutil.copy2(manifest_path, target_dir / "manifest.json")
 shutil.copy2(pack_path, target_dir / filename)
+notice = pathlib.Path("assets/catalog/ATTRIBUTION.txt")
+if notice.is_file():
+    shutil.copy2(notice, target_dir / "ATTRIBUTION.txt")
+else:
+    (target_dir / "ATTRIBUTION.txt").write_text(ATTRIBUTION, encoding="utf-8")
 print(f"Preserved offline catalogue: {product_count:,} products")
 PY

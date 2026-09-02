@@ -24,6 +24,7 @@ void main() {
     expect(establishment.address, '1 High Street, London');
     expect(establishment.numericRating, 5);
     expect(establishment.ratingSummary, 'Very good');
+    expect(establishment.ratingDateLabel, '10 Aug 2026');
     expect(establishment.distanceMiles, 1.25);
   });
 
@@ -37,5 +38,6 @@ void main() {
 
     expect(establishment.hasNumericRating, isFalse);
     expect(establishment.ratingSummary, 'Meets hygiene standards');
+    expect(establishment.ratingDateLabel, isNull);
   });
 }
